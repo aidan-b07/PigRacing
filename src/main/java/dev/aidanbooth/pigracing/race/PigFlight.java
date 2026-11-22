@@ -11,7 +11,8 @@ import org.bukkit.util.Vector;
 /**
  * Flies each racer's pig, once per tick, using only Bukkit's setVelocity so it works on every version.
  *
- * Holding space climbs and letting go falls, flappy-bird style. The pig flies where its rider looks,
+ * Flappy-bird style: each tap of space kicks the pig upwards and gravity pulls it back down, so
+ * height comes from timing taps, not holding the key. The pig flies where its rider looks,
  * and gets faster with each checkpoint passed until it crashes.
  *
  * Vertical speed is kept per racer instead of read back from the pig, because the server applies its
@@ -24,8 +25,8 @@ public final class PigFlight {
     private double speedPerCheckpoint;
     private double maxSpeed;
     private boolean requireForwardKey;
-    private double climbAcceleration;
-    private double climbSpeed;
+    private double jumpStrength;
+    private int jumpCooldown;
     private double gravity;
     private double maxFallSpeed;
     private int respawnHoverTicks;
@@ -41,10 +42,10 @@ public final class PigFlight {
         speedPerCheckpoint = config.getDouble("SpeedPerCheckpoint", 0.03);
         maxSpeed = config.getDouble("MaxSpeed", 0.9);
         requireForwardKey = config.getBoolean("RequireForwardKey", true);
-        climbAcceleration = config.getDouble("ClimbAcceleration", 0.4);
-        climbSpeed = config.getDouble("ClimbSpeed", 0.1);
-        gravity = config.getDouble("Gravity", 0.08);
-        maxFallSpeed = config.getDouble("MaxFallSpeed", 0.3);
+        jumpStrength = config.getDouble("JumpStrength", 0.42);
+        jumpCooldown = Math.max(0, config.getInt("JumpCooldownTicks", 3));
+        gravity = config.getDouble("Gravity", 0.06);
+        maxFallSpeed = config.getDouble("MaxFallSpeed", 0.6);
         respawnHoverTicks = Math.max(0, config.getInt("RespawnHoverTicks", 30));
         knockbackFade = Math.max(0, Math.min(0.95, config.getDouble("KnockbackFade", 0.7)));
     }
@@ -75,10 +76,15 @@ public final class PigFlight {
         }
 
         double vy = racer.getVerticalSpeed();
-        boolean hovering = racer.tickHover();
-        if (input.isJumping(player)) {
-            vy = Math.min(vy + climbAcceleration, climbSpeed);
-        } else if (hovering) {
+        // Read every tick, even on cooldown, so a press during it doesn't fire late
+        boolean pressed = input.consumeJumpPress(player);
+        boolean ready = racer.tickJumpCooldown();
+        if (pressed && ready) {
+            // A flap: straight to jump speed however fast the pig was falling, so every tap feels the same
+            vy = jumpStrength;
+            racer.startJumpCooldown(jumpCooldown);
+            racer.endHover();
+        } else if (racer.tickHover()) {
             // Just respawned: hold height for a moment instead of dropping straight away
             vy = 0;
         } else {

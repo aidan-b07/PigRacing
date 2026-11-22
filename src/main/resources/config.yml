@@ -52,7 +52,8 @@ Commands:
       - reply
       - me
 
-# Flappy-bird style: hold space to climb, let go to fall. The pig flies the way its rider looks.
+# Flappy-bird style: tap space to flap upwards, gravity pulls you back down. Holding space doesn't
+# keep you climbing, so height comes from timing your taps. The pig flies the way its rider looks.
 Flight:
   # Forward speed with no checkpoints passed
   BaseSpeed: 0.4
@@ -61,12 +62,13 @@ Flight:
   MaxSpeed: 0.9
   # true: hold W to fly forward. false: the pig always flies forward.
   RequireForwardKey: true
-  # Holding space adds this much upward speed each tick, up to ClimbSpeed
-  ClimbAcceleration: 0.4
-  ClimbSpeed: 0.1
-  # Not holding space removes this much each tick, down to -MaxFallSpeed
-  Gravity: 0.08
-  MaxFallSpeed: 0.3
+  # Upward speed a flap gives, whatever the pig was doing. 0.42 rises about 1.5 blocks.
+  JumpStrength: 0.42
+  # Ticks after a flap before the next one counts
+  JumpCooldownTicks: 3
+  # Downward speed added every tick, up to MaxFallSpeed
+  Gravity: 0.06
+  MaxFallSpeed: 0.6
   # Ticks a pig holds its height after respawning, so you have time to get going
   RespawnHoverTicks: 30
   # How hard a racer punching another racer's pig knocks it, and how fast that fades (0-0.95)

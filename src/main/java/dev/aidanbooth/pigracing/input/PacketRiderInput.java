@@ -29,6 +29,8 @@ final class PacketRiderInput extends PacketListenerAbstract implements RiderInpu
 
     /** Packets arrive on network threads, the race reads on the main thread. */
     private final Map<UUID, Integer> keys = new ConcurrentHashMap<>();
+    /** Jump presses not yet read by the race. */
+    private final Map<UUID, Boolean> jumpPresses = new ConcurrentHashMap<>();
 
     private PacketRiderInput() {
         super(PacketListenerPriority.MONITOR);
@@ -67,8 +69,17 @@ final class PacketRiderInput extends PacketListenerAbstract implements RiderInpu
         }
         UUID id = event.getUser().getUUID();
         if (id != null) {
-            keys.put(id, pressed);
+            Integer before = keys.put(id, pressed);
+            boolean wasJumping = before != null && (before & JUMP) != 0;
+            if ((pressed & JUMP) != 0 && !wasJumping) {
+                jumpPresses.put(id, Boolean.TRUE);
+            }
         }
+    }
+
+    @Override
+    public boolean consumeJumpPress(Player player) {
+        return jumpPresses.remove(player.getUniqueId()) != null;
     }
 
     @Override
@@ -84,6 +95,7 @@ final class PacketRiderInput extends PacketListenerAbstract implements RiderInpu
     @Override
     public void forget(Player player) {
         keys.remove(player.getUniqueId());
+        jumpPresses.remove(player.getUniqueId());
     }
 
     @Override
@@ -94,6 +106,7 @@ final class PacketRiderInput extends PacketListenerAbstract implements RiderInpu
     @Override
     public void shutdown() {
         keys.clear();
+        jumpPresses.clear();
         PacketEvents.getAPI().terminate();
     }
 }

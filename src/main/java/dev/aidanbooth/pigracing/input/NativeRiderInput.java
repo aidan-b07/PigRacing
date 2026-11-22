@@ -12,6 +12,7 @@ final class NativeRiderInput implements RiderInput {
     private final Method getCurrentInput;
     private final Method isJump;
     private final Method isForward;
+    private final java.util.Map<java.util.UUID, Boolean> jumpDown = new java.util.HashMap<>();
 
     private NativeRiderInput(Method getCurrentInput, Method isJump, Method isForward) {
         this.getCurrentInput = getCurrentInput;
@@ -35,6 +36,14 @@ final class NativeRiderInput implements RiderInput {
         return read(player, isJump);
     }
 
+    /** Polled once a tick, so a press counts when the key goes from up to down between polls. */
+    @Override
+    public boolean consumeJumpPress(Player player) {
+        boolean down = isJumping(player);
+        Boolean before = jumpDown.put(player.getUniqueId(), down);
+        return down && (before == null || !before);
+    }
+
     @Override
     public boolean isForward(Player player) {
         return read(player, isForward);
@@ -50,6 +59,7 @@ final class NativeRiderInput implements RiderInput {
 
     @Override
     public void forget(Player player) {
+        jumpDown.remove(player.getUniqueId());
     }
 
     @Override

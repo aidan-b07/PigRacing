@@ -17,6 +17,8 @@ public class Racer {
     private double verticalSpeed;
     /** Ticks left that the pig holds its height after a respawn. */
     private int hoverTicks;
+    private int jumpCooldown;
+    private int stuckTicks;
     private long finishMillis;
     /** A shove from another racer, fading over a few ticks. */
     private Vector knockback = new Vector();
@@ -131,6 +133,32 @@ public class Racer {
 
     public void setVerticalSpeed(double verticalSpeed) {
         this.verticalSpeed = verticalSpeed;
+    }
+
+    /** Ticks this racer has been riding while the server waits on a teleport confirmation. */
+    public int addStuckTick() {
+        return ++stuckTicks;
+    }
+
+    public void resetStuckTicks() {
+        stuckTicks = 0;
+    }
+
+    public void endHover() {
+        hoverTicks = 0;
+    }
+
+    /** Counts the jump cooldown down a tick. Returns true when the pig may flap. */
+    public boolean tickJumpCooldown() {
+        if (jumpCooldown > 0) {
+            jumpCooldown--;
+            return false;
+        }
+        return true;
+    }
+
+    public void startJumpCooldown(int ticks) {
+        jumpCooldown = ticks;
     }
 
     /** Whether the pig is still hovering after a respawn; counts down one tick. */

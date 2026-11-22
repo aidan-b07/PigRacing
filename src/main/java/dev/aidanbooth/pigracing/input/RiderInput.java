@@ -13,6 +13,12 @@ public interface RiderInput {
     /** Whether the player is holding the jump key (space). */
     boolean isJumping(Player player);
 
+    /**
+     * Whether the player pressed jump since this was last asked, so a tap shorter than a server tick
+     * still counts once, and holding the key only counts once.
+     */
+    boolean consumeJumpPress(Player player);
+
     /** Whether the player is holding the forward key (W). */
     boolean isForward(Player player);
 
