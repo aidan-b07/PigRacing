@@ -1,12 +1,11 @@
 package dev.aidanbooth.pigracing.race;
 
-import org.bukkit.Bukkit;
+import dev.aidanbooth.pigracing.utils.LocationSerialiser;
 import org.bukkit.Location;
-import org.bukkit.World;
 
 /**
- * A box of whole blocks, both corners included. Replaces WorldEdit 6's CuboidSelection, which no
- * longer exists in WorldEdit 7. Holds the world by name so a track can load before its world does.
+ * A box of whole blocks, both corners included: the optional race boundary. Holds the world by name
+ * so it can load before its world does.
  */
 public final class Region {
     private final String world;
@@ -28,12 +27,20 @@ public final class Region {
                 b.getBlockX(), b.getBlockY(), b.getBlockZ());
     }
 
-    public String getWorldName() {
-        return world;
-    }
-
-    public World getWorld() {
-        return Bukkit.getWorld(world);
+    /** Reads two stored corners, or null if either is missing or they're in different worlds. */
+    public static Region parse(String pos1, String pos2) {
+        String[] a = LocationSerialiser.split(pos1);
+        String[] b = LocationSerialiser.split(pos2);
+        if (a == null || b == null || !a[0].equals(b[0])) {
+            return null;
+        }
+        try {
+            return new Region(a[0],
+                    (int) Math.floor(Double.parseDouble(a[1])), (int) Math.floor(Double.parseDouble(a[2])), (int) Math.floor(Double.parseDouble(a[3])),
+                    (int) Math.floor(Double.parseDouble(b[1])), (int) Math.floor(Double.parseDouble(b[2])), (int) Math.floor(Double.parseDouble(b[3])));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public boolean contains(Location location) {
@@ -46,54 +53,15 @@ public final class Region {
                 && z >= minZ && z < maxZ + 1;
     }
 
-    /**
-     * Whether a move from one point to another passed through this region. A fast pig can skip a
-     * thin gate between two move events, so the path between them is checked too.
-     */
-    public boolean crossedBy(Location from, Location to) {
-        if (contains(to)) {
-            return true;
-        }
-        if (from == null || from.getWorld() != to.getWorld()) {
-            return false;
-        }
-        double distance = from.distance(to);
-        int steps = (int) Math.ceil(distance / 0.25);
-        if (steps <= 1 || steps > 200) {
-            return false;
-        }
-        Location point = from.clone();
-        double dx = (to.getX() - from.getX()) / steps;
-        double dy = (to.getY() - from.getY()) / steps;
-        double dz = (to.getZ() - from.getZ()) / steps;
-        for (int i = 1; i < steps; i++) {
-            point.add(dx, dy, dz);
-            if (contains(point)) {
-                return true;
-            }
-        }
-        return false;
+    public int sizeX() {
+        return maxX - minX + 1;
     }
 
-    /** The middle of the region, or null if its world isn't loaded. */
-    public Location center() {
-        World w = getWorld();
-        if (w == null) {
-            return null;
-        }
-        return new Location(w, (minX + maxX + 1) / 2.0, (minY + maxY + 1) / 2.0, (minZ + maxZ + 1) / 2.0);
+    public int sizeY() {
+        return maxY - minY + 1;
     }
 
-    /** True when the gate is wider along X than Z, i.e. racers fly through it along Z. */
-    public boolean facesAlongX() {
-        return (maxX - minX) > (maxZ - minZ);
-    }
-
-    public double distanceSquared(Location location) {
-        Location c = center();
-        if (c == null || location.getWorld() != c.getWorld()) {
-            return Double.MAX_VALUE;
-        }
-        return c.distanceSquared(location);
+    public int sizeZ() {
+        return maxZ - minZ + 1;
     }
 }

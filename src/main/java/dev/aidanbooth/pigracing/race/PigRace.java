@@ -3,7 +3,6 @@ package dev.aidanbooth.pigracing.race;
 import com.cryptomorin.xseries.messages.ActionBar;
 import com.cryptomorin.xseries.messages.Titles;
 import dev.aidanbooth.pigracing.Main;
-import dev.aidanbooth.pigracing.compat.DustParticles;
 import dev.aidanbooth.pigracing.compat.Entities;
 import dev.aidanbooth.pigracing.compat.Potions;
 import dev.aidanbooth.pigracing.compat.Sounds;
@@ -14,7 +13,6 @@ import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
-import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -49,6 +47,8 @@ public class PigRace {
     private final Location waitLocation;
     private final Location startLocation;
     private final int laps;
+    /** Optional box racers must stay inside, or null to use the distance from the start. */
+    private final Region boundary;
     private RaceState raceState = RaceState.WAITING;
     private BukkitTask gathering;
     /** Seconds until joining closes, while waiting. */
@@ -64,7 +64,7 @@ public class PigRace {
             return "The start location isn't set, or its world isn't loaded. Use /race setstartloc.";
         }
         if (plugin.getCheckpoints().size() == 0) {
-            return "The track has no checkpoints. Use /race pos1, /race pos2 and /race addcheckpoint.";
+            return "The track has no checkpoints. Use /race addcheckpoint <size>.";
         }
         return null;
     }
@@ -76,6 +76,7 @@ public class PigRace {
         this.waitLocation = LocationSerialiser.parse(config.getString("Data.WaitingLocation"));
         this.startLocation = LocationSerialiser.parse(config.getString("Data.StartLocation"));
         this.laps = Math.max(1, config.getInt("Settings.Laps", 3));
+        this.boundary = Region.parse(config.getString("Data.Boundary.Pos1"), config.getString("Data.Boundary.Pos2"));
 
         plugin.race = this;
         startGathering();
@@ -251,8 +252,7 @@ public class PigRace {
                 }
                 raceState = RaceState.INPROGRESS;
                 repeat(PigRace.this::flyPigs, 1, 1);
-                repeat(PigRace.this::showCheckpointParticles, 1, 2);
-                repeat(PigRace.this::checkTooFar, 10, 10);
+                repeat(PigRace.this::checkTooFar, 5, 5);
             }
         }.runTaskTimer(plugin, 20, 20));
     }
@@ -318,8 +318,8 @@ public class PigRace {
         Location before = r.getLastPigLocation();
         r.setLastPigLocation(now);
 
-        Region next = checkpoints.get(r.getCheckpoint() + 1);
-        if (next != null && next.crossedBy(before, now)) {
+        Checkpoint next = checkpoints.get(nextCheckpoint(r));
+        if (next != null && next.crossedBy(bodyCentre(before), bodyCentre(now))) {
             passedCheckpoint(r);
             return;
         }
@@ -336,6 +336,20 @@ public class PigRace {
         }
     }
 
+    /** The middle of a pig's body, from where it stands. Pigs are 0.9 blocks tall. */
+    private static Location bodyCentre(Location feet) {
+        return feet == null ? null : feet.clone().add(0, 0.45, 0);
+    }
+
+    /**
+     * The ring a racer has to fly through next. Ring 1 is the start/finish line: they start behind it,
+     * and after the last ring it's ring 1 again, which completes the lap.
+     */
+    public int nextCheckpoint(Racer racer) {
+        int passed = racer.getCheckpoint();
+        return passed >= checkpoints.size() ? 1 : passed + 1;
+    }
+
     /** Blocks a pig may land on without crashing (carpet by default), matched by name with * wildcards. */
     private boolean isSafeGround(Location at) {
         List<String> safe = config.getStringList("Settings.SafeGroundBlocks");
@@ -348,53 +362,6 @@ public class PigRace {
             }
         }
         return false;
-    }
-
-    private double particleAngle;
-
-    private void showCheckpointParticles() {
-        if (!config.getBoolean("Particles.Enabled", true)) {
-            return;
-        }
-        double radius = config.getDouble("Particles.Radius", 3);
-        double range = config.getDouble("Particles.ViewDistance", 40);
-        Color front = parseColor(config.getString("Particles.Color"), Color.FUCHSIA);
-        Color back = parseColor(config.getString("Particles.SecondColor"), Color.WHITE);
-        particleAngle += config.getDouble("Particles.Speed", 0.06);
-
-        for (Region gate : checkpoints.all()) {
-            Location center = gate.center();
-            if (center == null) {
-                continue;
-            }
-            boolean alongX = gate.facesAlongX();
-            for (Player p : center.getWorld().getPlayers()) {
-                if (p.getLocation().distanceSquared(center) > range * range) {
-                    continue;
-                }
-                // Four pairs of opposite points spinning around the gate's centre
-                for (int i = 0; i < 4; i++) {
-                    double angle = particleAngle + i * Math.PI / 2;
-                    double across = radius * Math.sin(angle);
-                    double up = radius * Math.cos(angle);
-                    Location a = center.clone().add(alongX ? across : 0, up, alongX ? 0 : across);
-                    Location b = center.clone().subtract(alongX ? across : 0, up, alongX ? 0 : across);
-                    DustParticles.show(p, a, front);
-                    DustParticles.show(p, b, back);
-                }
-            }
-        }
-    }
-
-    private static Color parseColor(String hex, Color fallback) {
-        if (hex == null) {
-            return fallback;
-        }
-        try {
-            return Color.fromRGB(Integer.parseInt(hex.replace("#", ""), 16));
-        } catch (IllegalArgumentException e) {
-            return fallback;
-        }
     }
 
     private void updateActionbars() {
@@ -414,37 +381,46 @@ public class PigRace {
         }
     }
 
+    /**
+     * Racers who leave the track go back to their last ring. With a boundary set that's the boundary
+     * box; without one, a distance from the start (0 turns it off).
+     */
     private void checkTooFar() {
         double max = config.getDouble("Settings.MaxDistanceFromStart", 150);
         for (Racer r : racers) {
-            Player player = r.getPlayer();
             if (!r.inGame() || r.getPig() == null) {
                 continue;
             }
-            boolean otherWorld = player.getWorld() != startLocation.getWorld();
-            if (otherWorld || player.getLocation().distanceSquared(startLocation) >= max * max) {
-                sendBack(r, startLocation);
-                player.sendMessage(plugin.message("Messages.GoneTooFar"));
+            Player player = r.getPlayer();
+            Location at = r.getPig().getLocation();
+            boolean outside;
+            if (boundary != null) {
+                outside = !boundary.contains(at);
+            } else {
+                outside = at.getWorld() != startLocation.getWorld()
+                        || (max > 0 && at.distanceSquared(startLocation) >= max * max);
+            }
+            if (outside) {
+                sendBack(r, lastSafePlace(r));
+                player.sendMessage(plugin.message("Messages.OutOfBounds"));
+                Sounds.play(player, config, "Sounds.Crash");
             }
         }
     }
 
     // ------------------------------------------------------------------ racing
 
-    /** The pig touched the ground: back to the last checkpoint passed, and lose all speed. */
+    /** The pig touched the ground: back to the last ring passed, and lose all speed. */
     public void crashed(Racer racer) {
-        Region last = checkpoints.get(racer.getCheckpoint());
-        Location to = last == null ? startLocation : last.center();
-        if (to == null) {
-            to = startLocation;
-        }
-        to = to.clone();
-        to.setYaw(racer.getPlayer().getLocation().getYaw());
-        if (last != null) {
-            to.add(0, config.getDouble("Settings.RespawnHeight", 2), 0);
-        }
-        sendBack(racer, to);
+        sendBack(racer, lastSafePlace(racer));
         Sounds.play(racer.getPlayer(), config, "Sounds.Crash");
+    }
+
+    /** Just past the last ring the racer flew through, facing on, or the start line before any. */
+    private Location lastSafePlace(Racer racer) {
+        Checkpoint last = checkpoints.get(racer.getCheckpoint());
+        Location to = last == null ? null : last.respawn(1.5, 0.45);
+        return to == null ? startLocation.clone() : to;
     }
 
     private void sendBack(Racer racer, Location to) {
@@ -460,15 +436,17 @@ public class PigRace {
 
     /** A racer flew through their next checkpoint. */
     public void passedCheckpoint(Racer racer) {
+        boolean lapDone = racer.getCheckpoint() >= checkpoints.size();
         racer.nextCheckpoint();
-        Sounds.play(racer.getPlayer(), config, "Sounds.Checkpoint");
         Bukkit.getPluginManager().callEvent(new CheckpointPassEvent(racer, this));
-
-        if (racer.getCheckpoint() < checkpoints.size()) {
+        if (!lapDone) {
+            Sounds.play(racer.getPlayer(), config, "Sounds.Checkpoint");
             return;
         }
-        racer.setCheckpoint(0);
+        // Back through ring 1: it counts as the first ring of the next lap
+        racer.setCheckpoint(1);
         racer.addLap();
+        Sounds.play(racer.getPlayer(), config, "Sounds.Lap");
         racer.getPlayer().sendMessage(plugin.message("Messages.LapComplete")
                 .replace("{lap}", String.valueOf(racer.getLap())).replace("{total}", String.valueOf(laps)));
         if (racer.getLap() < laps) {

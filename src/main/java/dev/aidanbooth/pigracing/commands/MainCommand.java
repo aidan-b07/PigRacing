@@ -1,18 +1,22 @@
 package dev.aidanbooth.pigracing.commands;
 
 import dev.aidanbooth.pigracing.Main;
+import dev.aidanbooth.pigracing.race.Checkpoint;
+import dev.aidanbooth.pigracing.race.Checkpoints;
 import dev.aidanbooth.pigracing.race.PigRace;
+import dev.aidanbooth.pigracing.race.RaceState;
+import dev.aidanbooth.pigracing.race.Region;
 import dev.aidanbooth.pigracing.utils.LocationSerialiser;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -22,13 +26,15 @@ import java.util.UUID;
 public class MainCommand implements CommandExecutor, TabCompleter {
     private static final String ADMIN = "pigracing.admin";
     private static final String START = "pigracing.start";
+    private static final int MAX_RING_SIZE = 32;
 
     private static final List<String> PLAYER_COMMANDS = Arrays.asList("help", "join", "leave");
     private static final List<String> ADMIN_COMMANDS = Arrays.asList("start", "forcestart", "stop", "reload",
-            "setwaitingloc", "setstartloc", "pos1", "pos2", "addcheckpoint", "resetcheckpoints");
+            "setwaitingloc", "setstartloc", "addcheckpoint", "removecheckpoint", "resetcheckpoints", "preview",
+            "pos1", "pos2", "setboundary", "clearboundary");
 
     private final Main plugin;
-    /** Each admin's two selected corners for the next checkpoint. */
+    /** Each admin's two selected corners for the race boundary. */
     private final Map<UUID, Location[]> selections = new HashMap<>();
 
     public MainCommand(Main plugin) {
@@ -72,21 +78,36 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             case "setstartloc":
                 setLocation(sender, "Data.StartLocation");
                 return true;
+            case "addcheckpoint":
+                addCheckpoint(sender, args, label);
+                return true;
+            case "removecheckpoint":
+                removeCheckpoint(sender, args, label);
+                return true;
+            case "resetcheckpoints":
+                if (allowed(sender, ADMIN) && trackEditable(sender)) {
+                    plugin.getCheckpoints().clear();
+                    saveTrack();
+                    sender.sendMessage(plugin.message("Messages.Admin.CheckpointsReset"));
+                }
+                return true;
+            case "preview":
+                preview(sender);
+                return true;
             case "pos1":
                 setCorner(sender, 0);
                 return true;
             case "pos2":
                 setCorner(sender, 1);
                 return true;
-            case "addcheckpoint":
-                addCheckpoint(sender);
+            case "setboundary":
+                setBoundary(sender);
                 return true;
-            case "resetcheckpoints":
+            case "clearboundary":
                 if (allowed(sender, ADMIN)) {
-                    plugin.getConfig().set("Data.Checkpoints", null);
+                    plugin.getConfig().set("Data.Boundary", null);
                     plugin.saveConfig();
-                    plugin.getCheckpoints().load(plugin.getConfig());
-                    sender.sendMessage(plugin.message("Messages.Admin.CheckpointsReset"));
+                    sender.sendMessage(plugin.message("Messages.Admin.BoundaryCleared"));
                 }
                 return true;
             default:
@@ -112,6 +133,21 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             return null;
         }
         return (Player) sender;
+    }
+
+    /** Changing the rings under a race that's flying would mix up everyone's progress. */
+    private boolean trackEditable(CommandSender sender) {
+        PigRace race = plugin.race;
+        if (race != null && race.getGameState() != RaceState.WAITING) {
+            sender.sendMessage(plugin.message("Messages.Admin.TrackInUse"));
+            return false;
+        }
+        return true;
+    }
+
+    private void saveTrack() {
+        plugin.getCheckpoints().save(plugin.getConfig());
+        plugin.saveConfig();
     }
 
     private void help(CommandSender sender, String label) {
@@ -195,6 +231,60 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(plugin.message("Messages.Admin.LocationSet"));
     }
 
+    /**
+     * /race addcheckpoint [size]: a ring where the admin stands, facing where they look. Standing at the
+     * bottom-middle of an opening and looking through it makes a ring that fits it exactly.
+     */
+    private void addCheckpoint(CommandSender sender, String[] args, String label) {
+        Player player = adminPlayer(sender);
+        if (player == null || !trackEditable(sender)) {
+            return;
+        }
+        int size = plugin.getConfig().getInt("Rings.DefaultSize", 3);
+        if (args.length > 1) {
+            size = parseInt(args[1], -1);
+            if (size < 1 || size > MAX_RING_SIZE) {
+                player.sendMessage(plugin.message("Messages.Admin.BadRingSize")
+                        .replace("{max}", String.valueOf(MAX_RING_SIZE)).replace("{label}", label));
+                return;
+            }
+        }
+        Checkpoint ring = Checkpoint.placedBy(player.getLocation(), size);
+        Checkpoints track = plugin.getCheckpoints();
+        track.add(ring);
+        saveTrack();
+        player.sendMessage(plugin.message("Messages.Admin.CheckpointAdded")
+                .replace("{number}", String.valueOf(track.size()))
+                .replace("{size}", String.valueOf(size))
+                .replace("{direction}", direction(ring)));
+    }
+
+    private void removeCheckpoint(CommandSender sender, String[] args, String label) {
+        if (!allowed(sender, ADMIN) || !trackEditable(sender)) {
+            return;
+        }
+        Checkpoints track = plugin.getCheckpoints();
+        int number = args.length > 1 ? parseInt(args[1], -1) : track.size();
+        if (!track.remove(number)) {
+            sender.sendMessage(plugin.message("Messages.Admin.NoSuchCheckpoint")
+                    .replace("{count}", String.valueOf(track.size())).replace("{label}", label));
+            return;
+        }
+        saveTrack();
+        sender.sendMessage(plugin.message("Messages.Admin.CheckpointRemoved")
+                .replace("{number}", String.valueOf(number)).replace("{count}", String.valueOf(track.size())));
+    }
+
+    private void preview(CommandSender sender) {
+        Player player = adminPlayer(sender);
+        if (player == null) {
+            return;
+        }
+        boolean on = plugin.getRings().togglePreview(player);
+        player.sendMessage(plugin.message(on ? "Messages.Admin.PreviewOn" : "Messages.Admin.PreviewOff")
+                .replace("{count}", String.valueOf(plugin.getCheckpoints().size())));
+    }
+
     private void setCorner(CommandSender sender, int corner) {
         Player player = adminPlayer(sender);
         if (player == null) {
@@ -207,7 +297,8 @@ public class MainCommand implements CommandExecutor, TabCompleter {
                 .replace("{position}", selection[corner].getBlockX() + ", " + selection[corner].getBlockY() + ", " + selection[corner].getBlockZ()));
     }
 
-    private void addCheckpoint(CommandSender sender) {
+    /** The boundary is optional: racers leaving it are sent back to their last ring. */
+    private void setBoundary(CommandSender sender) {
         Player player = adminPlayer(sender);
         if (player == null) {
             return;
@@ -221,29 +312,69 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(plugin.message("Messages.Admin.SelectionWorlds"));
             return;
         }
-        ConfigurationSection existing = plugin.getConfig().getConfigurationSection("Data.Checkpoints");
-        int number = existing == null ? 1 : existing.getKeys(false).size() + 1;
-        plugin.getConfig().set("Data.Checkpoints." + number + ".Loc1", LocationSerialiser.getLiteStringFromLocation(selection[0]));
-        plugin.getConfig().set("Data.Checkpoints." + number + ".Loc2", LocationSerialiser.getLiteStringFromLocation(selection[1]));
+        plugin.getConfig().set("Data.Boundary.Pos1", LocationSerialiser.getLiteStringFromLocation(selection[0]));
+        plugin.getConfig().set("Data.Boundary.Pos2", LocationSerialiser.getLiteStringFromLocation(selection[1]));
         plugin.saveConfig();
-        plugin.getCheckpoints().load(plugin.getConfig());
         selections.remove(player.getUniqueId());
-        player.sendMessage(plugin.message("Messages.Admin.CheckpointAdded").replace("{number}", String.valueOf(number)));
+        Region box = Region.between(selection[0], selection[1]);
+        player.sendMessage(plugin.message("Messages.Admin.BoundarySet")
+                .replace("{size}", box.sizeX() + " x " + box.sizeY() + " x " + box.sizeZ()));
+        Location start = LocationSerialiser.parse(plugin.getConfig().getString("Data.StartLocation"));
+        if (start != null && !box.contains(start)) {
+            player.sendMessage(plugin.message("Messages.Admin.StartOutsideBoundary"));
+        }
+    }
+
+    /** The compass direction a ring faces, for the confirmation message. */
+    private static String direction(Checkpoint ring) {
+        if (ring.getPitch() <= -60) {
+            return "up";
+        }
+        if (ring.getPitch() >= 60) {
+            return "down";
+        }
+        String[] names = {"south", "south-west", "west", "north-west", "north", "north-east", "east", "south-east"};
+        int index = (int) Math.round(ring.getYaw() / 45.0) & 7;
+        String facing = names[index];
+        if (ring.getPitch() < 0) {
+            return facing + ", tilted up";
+        }
+        if (ring.getPitch() > 0) {
+            return facing + ", tilted down";
+        }
+        return facing;
+    }
+
+    private static int parseInt(String s, int fallback) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command cmd, String label, String[] args) {
+        List<String> options;
+        if (args.length == 1) {
+            options = new ArrayList<>(PLAYER_COMMANDS);
+            if (sender.hasPermission(ADMIN)) {
+                options.addAll(ADMIN_COMMANDS);
+            } else if (sender.hasPermission(START)) {
+                options.add("start");
+            }
+        } else if (args.length == 2 && sender.hasPermission(ADMIN) && args[0].equalsIgnoreCase("addcheckpoint")) {
+            options = Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8");
+        } else if (args.length == 2 && sender.hasPermission(ADMIN) && args[0].equalsIgnoreCase("removecheckpoint")) {
+            options = new ArrayList<>();
+            for (int i = 1; i <= plugin.getCheckpoints().size(); i++) {
+                options.add(String.valueOf(i));
+            }
+        } else {
+            return Collections.emptyList();
+        }
+        String typed = args[args.length - 1].toLowerCase(Locale.ROOT);
         List<String> matches = new ArrayList<>();
-        if (args.length != 1) {
-            return matches;
-        }
-        List<String> options = new ArrayList<>(PLAYER_COMMANDS);
-        if (sender.hasPermission(ADMIN)) {
-            options.addAll(ADMIN_COMMANDS);
-        } else if (sender.hasPermission(START)) {
-            options.add("start");
-        }
-        String typed = args[0].toLowerCase(Locale.ROOT);
         for (String option : options) {
             if (option.startsWith(typed)) {
                 matches.add(option);

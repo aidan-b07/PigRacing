@@ -15,8 +15,8 @@ Settings:
   EndDelay: 5
   # Racers this far from the start (or in another world) are sent back to it
   MaxDistanceFromStart: 150
-  # Blocks above a checkpoint's centre that a crashed racer respawns at
-  RespawnHeight: 2
+  # With a boundary set (/race pos1, /race pos2, /race setboundary) racers leaving that box are sent
+  # back to their last ring instead, and MaxDistanceFromStart is ignored. 0 above turns the distance off.
   # Racers can't be hurt while racing
   ProtectRacers: true
   # Ticks a pig may sit on the ground at the start or after respawning before it counts as a crash
@@ -83,15 +83,24 @@ Flight:
   KnockbackStrength: 1.0
   KnockbackFade: 0.7
 
-Particles:
+# Checkpoint rings, drawn in particles. Each racer's next ring is highlighted.
+Rings:
   Enabled: true
-  # Spinning ring around each checkpoint
-  Radius: 3
-  Speed: 0.06
-  Color: "#FF00FF"
-  SecondColor: "#FFFFFF"
-  # Only players this close to a checkpoint see its particles
-  ViewDistance: 40
+  # Size used by /race addcheckpoint when none is given. A size 3 ring fits a 3x3 opening.
+  DefaultSize: 3
+  # Ticks between redraws. Lower looks more solid but sends more particles.
+  Interval: 2
+  # Only rings this close to a player are drawn for them
+  ViewDistance: 48
+  # Blocks between particles around a ring
+  Spacing: 0.5
+  RingColor: "#FFFFFF"
+  # The ring a racer has to fly through next: denser, pink, with sparkles circling inside it
+  NextSpacing: 0.25
+  NextRingColor: "#FF55FF"
+  SparkleColor: "#FFFFFF"
+  Sparkles: 4
+  SpinSpeed: 0.15
 
 # Sound names are modern Minecraft names; older servers get the closest match. Use "none" for silence.
 Sounds:
@@ -107,6 +116,10 @@ Sounds:
     sound: ENTITY_PLAYER_LEVELUP
     volume: 1.0
     pitch: 1.0
+  Lap:
+    sound: ENTITY_PLAYER_LEVELUP
+    volume: 1.0
+    pitch: 1.4
   Crash:
     sound: ENTITY_VILLAGER_DEATH
     volume: 1.0

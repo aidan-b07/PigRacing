@@ -42,6 +42,7 @@ public class RaceListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
+        plugin.getRings().forget(e.getPlayer());
         if (plugin.race != null) {
             plugin.race.removePlayer(e.getPlayer(), false);
         }

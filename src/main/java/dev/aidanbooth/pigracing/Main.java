@@ -7,7 +7,9 @@ import dev.aidanbooth.pigracing.listeners.RaceListener;
 import dev.aidanbooth.pigracing.race.Checkpoints;
 import dev.aidanbooth.pigracing.race.PigFlight;
 import dev.aidanbooth.pigracing.race.PigRace;
+import dev.aidanbooth.pigracing.race.RingRenderer;
 import org.bukkit.ChatColor;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -20,6 +22,7 @@ public final class Main extends JavaPlugin {
 
     private final Checkpoints checkpoints = new Checkpoints();
     private PigFlight flight;
+    private RingRenderer rings;
     private boolean inputLoadFailed;
 
     @Override
@@ -53,7 +56,10 @@ public final class Main extends JavaPlugin {
         getLogger().info("Reading the jump key with " + input.name());
 
         flight = new PigFlight(input, getConfig().getConfigurationSection("Flight"));
-        checkpoints.load(getConfig());
+        checkpoints.load(getConfig(), getLogger());
+        rings = new RingRenderer(this);
+        rings.reload(ringsConfig());
+        getServer().getScheduler().runTaskTimer(this, rings, 1, Math.max(1, getConfig().getInt("Rings.Interval", 2)));
 
         getServer().getPluginManager().registerEvents(new RaceListener(this), this);
         RaceListener.registerPickupBlocker(this);
@@ -76,12 +82,22 @@ public final class Main extends JavaPlugin {
 
     public void reload() {
         reloadConfig();
-        checkpoints.load(getConfig());
+        checkpoints.load(getConfig(), getLogger());
         flight.reload(getConfig().getConfigurationSection("Flight"));
+        rings.reload(ringsConfig());
+    }
+
+    private ConfigurationSection ringsConfig() {
+        ConfigurationSection section = getConfig().getConfigurationSection("Rings");
+        return section != null ? section : getConfig().createSection("Rings");
     }
 
     public Checkpoints getCheckpoints() {
         return checkpoints;
+    }
+
+    public RingRenderer getRings() {
+        return rings;
     }
 
     public PigFlight getFlight() {

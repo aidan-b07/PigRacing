@@ -54,10 +54,11 @@ public final class DustParticles {
     private DustParticles() {
     }
 
-    public static void show(Player player, Location at, Color color) {
+    /** One dust particle. {@code size} only applies on 1.13+, older clients have one size. */
+    public static void show(Player player, Location at, Color color, float size) {
         try {
             if (SPAWN_WITH_DATA != null) {
-                SPAWN_WITH_DATA.invoke(player, DUST, at, 1, 0d, 0d, 0d, 0d, DUST_OPTIONS.newInstance(color, 1f));
+                SPAWN_WITH_DATA.invoke(player, DUST, at, 1, 0d, 0d, 0d, 0d, DUST_OPTIONS.newInstance(color, size));
                 return;
             }
             // Count 0 makes the offsets a colour; red can't be exactly 0 or the client picks red
