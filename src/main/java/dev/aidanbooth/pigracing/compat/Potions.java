@@ -13,10 +13,15 @@ public final class Potions {
     private Potions() {
     }
 
+    /**
+     * Stops a mob walking on its own. Only its own legs: velocity set by the plugin still moves it,
+     * so a race pig stays frozen the whole race and can't wander off when it's on the ground.
+     */
     public static void freeze(LivingEntity entity, int ticks) {
         if (SLOWNESS != null) {
             entity.removePotionEffect(SLOWNESS);
-            entity.addPotionEffect(new PotionEffect(SLOWNESS, ticks, 100));
+            // Ambient, no particles: no potion swirls around the pig
+            entity.addPotionEffect(new PotionEffect(SLOWNESS, ticks, 100, true, false));
         }
     }
 

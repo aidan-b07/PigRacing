@@ -13,7 +13,13 @@ public class Racer {
     private boolean inGame;
     /** Checkpoints passed since the pig last touched the ground. Each one adds speed. */
     private int speedLevel;
-    private double verticalSpeed;
+    /** Forward speed, eased towards the pig's target speed. */
+    private double speed;
+    /** The velocity flown last tick, smoothed towards where the rider looks. */
+    private Vector velocity = new Vector();
+    /** Ticks left that the pig holds its height after a respawn. */
+    private int hoverTicks;
+    private long finishMillis;
     /** A shove from another racer, fading over a few ticks. */
     private Vector knockback = new Vector();
     /** Where the pig was last tick, to catch gates it flew through between ticks. */
@@ -75,9 +81,12 @@ public class Racer {
         return speedLevel;
     }
 
-    public void resetSpeed() {
+    /** Back to a standstill after a crash or respawn, hovering for a moment. */
+    public void resetSpeed(int hoverTicks) {
         speedLevel = 0;
-        verticalSpeed = 0;
+        speed = 0;
+        velocity = new Vector();
+        this.hoverTicks = hoverTicks;
         knockback = new Vector();
         lastPigLocation = null;
         airborne = false;
@@ -119,11 +128,36 @@ public class Racer {
         this.airborne = airborne;
     }
 
-    public double getVerticalSpeed() {
-        return verticalSpeed;
+    public double getSpeed() {
+        return speed;
     }
 
-    public void setVerticalSpeed(double verticalSpeed) {
-        this.verticalSpeed = verticalSpeed;
+    public void setSpeed(double speed) {
+        this.speed = speed;
+    }
+
+    public Vector getVelocity() {
+        return velocity;
+    }
+
+    public void setVelocity(Vector velocity) {
+        this.velocity = velocity;
+    }
+
+    /** Whether the pig is still hovering after a respawn; counts down one tick. */
+    public boolean tickHover() {
+        if (hoverTicks <= 0) {
+            return false;
+        }
+        hoverTicks--;
+        return true;
+    }
+
+    public long getFinishMillis() {
+        return finishMillis;
+    }
+
+    public void setFinishMillis(long finishMillis) {
+        this.finishMillis = finishMillis;
     }
 }

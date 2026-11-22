@@ -29,6 +29,69 @@ public final class Entities {
     public static void face(Entity entity, float yaw, float pitch) {
         if (SET_ROTATION != null) {
             invoke(SET_ROTATION, entity, yaw, pitch);
+            return;
+        }
+        LegacyRotation.set(entity, yaw, pitch);
+    }
+
+    /**
+     * Before 1.13 there's no API to turn an entity that has a rider (teleporting it fails), so the
+     * server entity's rotation fields are set directly. Body, head and facing all have to move, or the
+     * client snaps the pig back. Names are Spigot's for 1.8 to 1.12; anything missing is skipped.
+     */
+    private static final class LegacyRotation {
+        private static boolean broken;
+        private static Method getHandle;
+        private static java.lang.reflect.Field yaw, pitch, bodyYaw, headYaw;
+
+        static void set(Entity entity, float newYaw, float newPitch) {
+            if (broken) {
+                return;
+            }
+            try {
+                if (getHandle == null) {
+                    getHandle = entity.getClass().getMethod("getHandle");
+                    Class<?> nms = getHandle.invoke(entity).getClass();
+                    yaw = field(nms, "yaw");
+                    pitch = field(nms, "pitch");
+                    // Obfuscated: renderYawOffset and rotationYawHead on 1.8 (v1_8_R3)
+                    if (nms.getName().contains("v1_8_R3")) {
+                        bodyYaw = field(nms, "aI");
+                        headYaw = field(nms, "aK");
+                    }
+                    if (yaw == null) {
+                        broken = true;
+                        return;
+                    }
+                }
+                Object handle = getHandle.invoke(entity);
+                yaw.setFloat(handle, newYaw);
+                if (pitch != null) {
+                    pitch.setFloat(handle, newPitch);
+                }
+                if (bodyYaw != null) {
+                    bodyYaw.setFloat(handle, newYaw);
+                }
+                if (headYaw != null) {
+                    headYaw.setFloat(handle, newYaw);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                broken = true;
+            }
+        }
+
+        private static java.lang.reflect.Field field(Class<?> type, String name) {
+            for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+                try {
+                    java.lang.reflect.Field f = c.getDeclaredField(name);
+                    if (f.getType() == float.class) {
+                        f.setAccessible(true);
+                        return f;
+                    }
+                } catch (NoSuchFieldException ignored) {
+                }
+            }
+            return null;
         }
     }
 

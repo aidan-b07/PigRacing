@@ -184,7 +184,6 @@ public class PigRace {
         }
         raceState = RaceState.STARTING;
 
-        int countdownTicks = 20 * (countdownLength() + 1);
         for (Racer r : racers) {
             Player player = r.getPlayer();
             player.teleport(startLocation);
@@ -194,8 +193,10 @@ public class PigRace {
             pig.setRemoveWhenFarAway(false);
             pig.setMetadata(PIG_TAG, new FixedMetadataValue(plugin, true));
             Entities.notPersistent(pig);
-            // Keeps the pig still until GO
-            Potions.freeze(pig, countdownTicks);
+            // The pig never walks by itself: it only moves when flown, so it stays put until GO and
+            // can't wander off while it's on the ground
+            Potions.freeze(pig, Integer.MAX_VALUE);
+            Entities.face(pig, startLocation.getYaw(), 0);
             Entities.mount(pig, player);
 
             r.setPig(pig);
@@ -247,9 +248,6 @@ public class PigRace {
                 for (Racer r : racers) {
                     Titles.sendTitle(r.getPlayer(), 5, 10, 5, go, "");
                     Sounds.play(r.getPlayer(), config, "Sounds.Go");
-                    if (r.getPig() != null) {
-                        Potions.unfreeze(r.getPig());
-                    }
                 }
                 raceState = RaceState.INPROGRESS;
                 repeat(PigRace.this::flyPigs, 1, 1);
@@ -457,7 +455,7 @@ public class PigRace {
         } finally {
             allowedDismounts.remove(player.getUniqueId());
         }
-        racer.resetSpeed();
+        racer.resetSpeed(plugin.getFlight().getRespawnHoverTicks());
     }
 
     /** A racer flew through their next checkpoint. */

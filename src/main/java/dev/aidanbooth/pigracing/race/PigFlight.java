@@ -2,6 +2,7 @@ package dev.aidanbooth.pigracing.race;
 
 import dev.aidanbooth.pigracing.compat.Entities;
 import dev.aidanbooth.pigracing.input.RiderInput;
+import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -11,11 +12,13 @@ import org.bukkit.util.Vector;
 /**
  * Flies each racer's pig, once per tick, using only Bukkit's setVelocity so it works on every version.
  *
- * Holding space climbs and letting go falls, flappy-bird style. The pig flies where its rider looks,
- * and gets faster with each checkpoint passed until it touches the ground.
+ * The pig flies where its rider looks, up and down included, like a glider: hold W to fly, let go and
+ * it slows down and sinks. Climbing costs speed and diving gains it, and every checkpoint passed since
+ * the pig last crashed raises its top speed. Turns are smoothed so the pig banks round instead of
+ * snapping to the camera.
  *
- * Vertical speed is kept per racer instead of read back from the pig, because the server applies its
- * own gravity to the pig between ticks and reading it back would count gravity twice.
+ * The velocity is kept per racer instead of read back from the pig, because the server applies its own
+ * gravity and friction to the pig between ticks, and reading that back would count them twice.
  */
 public final class PigFlight {
     private final RiderInput input;
@@ -24,10 +27,16 @@ public final class PigFlight {
     private double speedPerCheckpoint;
     private double maxSpeed;
     private boolean requireForwardKey;
-    private double climbAcceleration;
-    private double climbSpeed;
-    private double gravity;
-    private double maxFallSpeed;
+    private double acceleration;
+    private double deceleration;
+    private double handling;
+    private double maxClimb;
+    private double maxDive;
+    private double takeoffAngle;
+    private double diveBoost;
+    private double climbPenalty;
+    private double sinkSpeed;
+    private int respawnHoverTicks;
     private double knockbackFade;
 
     public PigFlight(RiderInput input, ConfigurationSection config) {
@@ -36,19 +45,34 @@ public final class PigFlight {
     }
 
     public void reload(ConfigurationSection config) {
-        baseSpeed = config.getDouble("BaseSpeed", 0.4);
+        baseSpeed = Math.max(0.01, config.getDouble("BaseSpeed", 0.45));
         speedPerCheckpoint = config.getDouble("SpeedPerCheckpoint", 0.03);
-        maxSpeed = config.getDouble("MaxSpeed", 0.9);
+        maxSpeed = Math.max(baseSpeed, config.getDouble("MaxSpeed", 0.9));
         requireForwardKey = config.getBoolean("RequireForwardKey", true);
-        climbAcceleration = config.getDouble("ClimbAcceleration", 0.4);
-        climbSpeed = config.getDouble("ClimbSpeed", 0.1);
-        gravity = config.getDouble("Gravity", 0.08);
-        maxFallSpeed = config.getDouble("MaxFallSpeed", 0.3);
-        knockbackFade = Math.max(0, Math.min(0.95, config.getDouble("KnockbackFade", 0.7)));
+        acceleration = Math.max(0.001, config.getDouble("Acceleration", 0.04));
+        deceleration = Math.max(0.001, config.getDouble("Deceleration", 0.03));
+        handling = clamp(config.getDouble("Handling", 0.3), 0.05, 1);
+        maxClimb = Math.toRadians(clamp(config.getDouble("MaxClimbAngle", 50), 0, 90));
+        maxDive = Math.toRadians(clamp(config.getDouble("MaxDiveAngle", 70), 0, 90));
+        takeoffAngle = Math.toRadians(clamp(config.getDouble("TakeoffAngle", 25), 0, 90));
+        diveBoost = Math.max(0, config.getDouble("DiveBoost", 0.25));
+        climbPenalty = clamp(config.getDouble("ClimbPenalty", 0.2), 0, 1);
+        sinkSpeed = Math.max(0, config.getDouble("SinkSpeed", 0.3));
+        respawnHoverTicks = Math.max(0, config.getInt("RespawnHoverTicks", 30));
+        knockbackFade = clamp(config.getDouble("KnockbackFade", 0.7), 0, 0.95);
     }
 
     public RiderInput getInput() {
         return input;
+    }
+
+    public int getRespawnHoverTicks() {
+        return respawnHoverTicks;
+    }
+
+    /** The speed a racer flies at right now, for the action bar. */
+    public double topSpeed(Racer racer) {
+        return Math.min(baseSpeed + speedPerCheckpoint * racer.getSpeedLevel(), maxSpeed);
     }
 
     /** Moves one racer's pig for this tick. */
@@ -63,24 +87,49 @@ public final class PigFlight {
             return;
         }
 
-        double vy = racer.getVerticalSpeed();
-        if (input.isJumping(player)) {
-            vy = Math.min(vy + climbAcceleration, climbSpeed);
-        } else {
-            vy = Math.max(vy - gravity, -maxFallSpeed);
-        }
-        racer.setVerticalSpeed(vy);
-
-        double speed = 0;
-        if (!requireForwardKey || input.isForward(player)) {
-            speed = Math.min(baseSpeed + speedPerCheckpoint * racer.getSpeedLevel(), maxSpeed);
+        Location eye = player.getLocation();
+        float yaw = eye.getYaw();
+        // Minecraft pitch is negative looking up; here up is positive
+        double pitch = clamp(-Math.toRadians(eye.getPitch()), -maxDive, maxClimb);
+        boolean throttle = !requireForwardKey || input.isForward(player);
+        if (throttle && pig.isOnGround()) {
+            // Looking level or down on the ground would just scrape along it, so take off instead
+            pitch = Math.max(pitch, takeoffAngle);
         }
 
-        float yaw = player.getLocation().getYaw();
+        // Speed eases towards its target instead of jumping there
+        double target = 0;
+        if (throttle) {
+            double slope = Math.sin(pitch);
+            double factor = slope >= 0 ? 1 - climbPenalty * slope : 1 + diveBoost * -slope;
+            target = topSpeed(racer) * factor;
+        }
+        double speed = racer.getSpeed();
+        speed = speed < target ? Math.min(target, speed + acceleration) : Math.max(target, speed - deceleration);
+        racer.setSpeed(speed);
+
         double radians = Math.toRadians(yaw);
-        Vector velocity = new Vector(-Math.sin(radians) * speed, vy, Math.cos(radians) * speed);
-        velocity.add(racer.takeKnockback(knockbackFade));
-        pig.setVelocity(velocity);
+        double flat = Math.cos(pitch);
+        Vector desired = new Vector(-Math.sin(radians) * flat, Math.sin(pitch), Math.cos(radians) * flat).multiply(speed);
+
+        // Without enough speed to glide the pig sinks, all the way to SinkSpeed once it's stopped
+        double lift = Math.min(1, speed / baseSpeed);
+        double sink = sinkSpeed * (1 - lift);
+        if (racer.tickHover()) {
+            sink = 0;
+            desired.setY(Math.max(0, desired.getY()));
+        }
+        desired.setY(desired.getY() - sink);
+
+        Vector velocity = racer.getVelocity();
+        velocity.add(desired.subtract(velocity).multiply(handling));
+        racer.setVelocity(velocity);
+
+        pig.setVelocity(velocity.clone().add(racer.takeKnockback(knockbackFade)));
         Entities.face(pig, yaw, 0);
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

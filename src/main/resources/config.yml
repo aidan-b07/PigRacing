@@ -52,20 +52,33 @@ Commands:
       - reply
       - me
 
+# The pig flies where its rider looks, up and down included. Hold W to fly; let go and it slows
+# down and glides to the ground.
 Flight:
-  # Forward speed with no checkpoints passed
-  BaseSpeed: 0.4
-  # Extra speed for every checkpoint passed since the pig last touched the ground
+  # Top speed with no checkpoints passed
+  BaseSpeed: 0.45
+  # Extra top speed for every checkpoint passed since the pig last crashed
   SpeedPerCheckpoint: 0.03
   MaxSpeed: 0.9
-  # true: hold W to fly forward. false: the pig always flies forward.
+  # true: hold W to fly. false: the pig always flies forward.
   RequireForwardKey: true
-  # Holding space adds this much upward speed each tick, up to ClimbSpeed
-  ClimbAcceleration: 0.4
-  ClimbSpeed: 0.1
-  # Not holding space removes this much each tick, down to -MaxFallSpeed
-  Gravity: 0.08
-  MaxFallSpeed: 0.3
+  # Speed gained each tick while speeding up, and lost each tick while slowing down
+  Acceleration: 0.04
+  Deceleration: 0.03
+  # 0.05-1: how quickly the pig turns to where you look. Lower is smoother and heavier.
+  Handling: 0.3
+  # Steepest climb and dive, in degrees
+  MaxClimbAngle: 50
+  MaxDiveAngle: 70
+  # On the ground, holding W always climbs at least this steeply, so the pig takes off
+  TakeoffAngle: 25
+  # Diving straight down is this much faster (0.25 = 25%); climbing straight up this much slower
+  DiveBoost: 0.25
+  ClimbPenalty: 0.2
+  # How fast a pig with no speed sinks
+  SinkSpeed: 0.3
+  # Ticks a pig holds its height after respawning, so you have time to get going
+  RespawnHoverTicks: 30
   # How hard a racer punching another racer's pig knocks it, and how fast that fades (0-0.95)
   KnockbackStrength: 1.0
   KnockbackFade: 0.7
