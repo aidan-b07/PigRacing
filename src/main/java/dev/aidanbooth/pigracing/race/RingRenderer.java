@@ -48,6 +48,7 @@ public final class RingRenderer implements Runnable {
     private double nextSpinSpeed;
     private boolean ripple;
     private double rippleSpeed;
+    private double rippleSpacing;
 
     public RingRenderer(Main plugin) {
         this.plugin = plugin;
@@ -55,19 +56,20 @@ public final class RingRenderer implements Runnable {
 
     public void reload(ConfigurationSection config) {
         enabled = config.getBoolean("Enabled", true);
-        viewDistance = config.getDouble("ViewDistance", 48);
+        viewDistance = config.getDouble("ViewDistance", 32);
         color = parseColor(config.getString("Color"), Color.fromRGB(0xFF55FF));
         secondColor = parseColor(config.getString("SecondColor"), Color.WHITE);
-        outlineSpacing = config.getDouble("OutlineSpacing", 1.2);
+        outlineSpacing = config.getDouble("OutlineSpacing", 0);
         comets = Math.max(0, config.getInt("Comets", 4));
-        cometLength = Math.max(1, config.getInt("CometLength", 4));
+        cometLength = Math.max(1, config.getInt("CometLength", 2));
         spinSpeed = config.getDouble("SpinSpeed", 0.12);
-        nextOutlineSpacing = config.getDouble("NextOutlineSpacing", 0.3);
+        nextOutlineSpacing = config.getDouble("NextOutlineSpacing", 0.5);
         nextComets = Math.max(0, config.getInt("NextComets", 4));
-        nextCometLength = Math.max(1, config.getInt("NextCometLength", 7));
+        nextCometLength = Math.max(1, config.getInt("NextCometLength", 4));
         nextSpinSpeed = config.getDouble("NextSpinSpeed", 0.25);
         ripple = config.getBoolean("Ripple", true);
         rippleSpeed = Math.max(0.005, config.getDouble("RippleSpeed", 0.05));
+        rippleSpacing = Math.max(0.2, config.getDouble("RippleSpacing", 0.7));
     }
 
     /** Turns the track preview on or off for a player. Returns whether it's now on. */
@@ -141,7 +143,7 @@ public final class RingRenderer implements Runnable {
             double phase = (time * rippleSpeed) % 1;
             double rippleRadius = r * (1 - 0.75 * phase);
             Color fade = mix(secondColor, color, phase);
-            drawCircle(player, ring, rippleRadius, fade, 0.45, 0, (float) (1.1 - 0.6 * phase));
+            drawCircle(player, ring, rippleRadius, fade, rippleSpacing, 0, (float) (1.1 - 0.6 * phase));
         }
     }
 
