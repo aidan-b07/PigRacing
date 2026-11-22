@@ -104,20 +104,84 @@ public final class Main extends JavaPlugin {
         return flight;
     }
 
-    /** A message from config with colour codes applied, or the path itself if it's missing. */
+    /**
+     * A message from config with {prefix} filled in and colour codes applied, or the path itself if
+     * it's missing. Lists come back unchanged in order; lines starting {center} are centred by
+     * {@link #center} once their placeholders are filled.
+     */
     public String message(String path) {
-        return color(getConfig().getString(path, path));
+        return color(withPrefix(getConfig().getString(path, path)));
     }
 
     public List<String> messages(String path) {
         List<String> lines = new ArrayList<>();
         for (String line : getConfig().getStringList(path)) {
-            lines.add(color(line));
+            lines.add(color(withPrefix(line)));
         }
         return lines;
     }
 
+    private String withPrefix(String text) {
+        return text == null ? null : text.replace("{prefix}", getConfig().getString("Messages.Prefix", ""));
+    }
+
     public static String color(String text) {
         return text == null ? "" : ChatColor.translateAlternateColorCodes('&', text);
+    }
+
+    /** Half the width of the chat box, in the default font's pixels. */
+    private static final int CHAT_CENTRE_PX = 154;
+
+    /** Centres a line in chat if it starts with {center}; otherwise returns it as it is. */
+    public static String center(String line) {
+        if (line == null || !line.startsWith("{center}")) {
+            return line;
+        }
+        String text = line.substring("{center}".length());
+        int width = 0;
+        boolean code = false;
+        boolean bold = false;
+        for (char c : text.toCharArray()) {
+            if (c == ChatColor.COLOR_CHAR) {
+                code = true;
+                continue;
+            }
+            if (code) {
+                code = false;
+                char lower = Character.toLowerCase(c);
+                if (lower == 'l') {
+                    bold = true;
+                } else if (lower == 'r' || (lower >= '0' && lower <= '9') || (lower >= 'a' && lower <= 'f')) {
+                    // Colours reset formatting
+                    bold = false;
+                }
+                continue;
+            }
+            width += charWidth(c) + (bold && c != ' ' ? 2 : 1);
+        }
+        int padding = CHAT_CENTRE_PX - width / 2;
+        StringBuilder spaces = new StringBuilder();
+        for (int px = 0; px + 4 <= padding; px += 4) {
+            spaces.append(' ');
+        }
+        return spaces + text;
+    }
+
+    /** Pixel width of a character in Minecraft's default font, without the gap after it. */
+    private static int charWidth(char c) {
+        switch (c) {
+            case 'i': case '!': case ',': case '.': case ':': case ';': case '|': case '\'':
+                return 1;
+            case 'l': case '`':
+                return 2;
+            case 'I': case 't': case '[': case ']': case ' ':
+                return 3;
+            case 'f': case 'k': case '"': case '(': case ')': case '*': case '<': case '>': case '{': case '}':
+                return 4;
+            case '@': case '~':
+                return 6;
+            default:
+                return 5;
+        }
     }
 }

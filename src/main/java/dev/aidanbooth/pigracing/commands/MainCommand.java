@@ -151,13 +151,14 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     }
 
     private void help(CommandSender sender, String label) {
-        for (String line : plugin.messages("Messages.Help.Player")) {
-            sender.sendMessage(line.replace("{label}", label));
-        }
+        List<String> lines = new ArrayList<>(plugin.messages("Messages.Help.Header"));
+        lines.addAll(plugin.messages("Messages.Help.Player"));
         if (sender.hasPermission(ADMIN)) {
-            for (String line : plugin.messages("Messages.Help.Admin")) {
-                sender.sendMessage(line.replace("{label}", label));
-            }
+            lines.addAll(plugin.messages("Messages.Help.Admin"));
+        }
+        lines.addAll(plugin.messages("Messages.Help.Footer"));
+        for (String line : lines) {
+            sender.sendMessage(Main.center(line.replace("{label}", label)));
         }
     }
 

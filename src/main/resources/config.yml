@@ -13,7 +13,7 @@ Settings:
   MinPlayers: 2
   # Seconds between the last racer finishing and everyone being sent back
   EndDelay: 5
-  # Racers this far from the start (or in another world) are sent back to it
+  # Racers this far from the start (or in another world) are sent back to their last ring
   MaxDistanceFromStart: 150
   # With a boundary set (/race pos1, /race pos2, /race setboundary) racers leaving that box are sent
   # back to their last ring instead, and MaxDistanceFromStart is ignored. 0 above turns the distance off.
@@ -128,81 +128,136 @@ Sounds:
 Titles:
   # Shown before the start, counting down from the highest number
   Countdown:
-    5: "&a5"
-    4: "&a4"
-    3: "&63"
-    2: "&62"
-    1: "&c1"
-  Go: "&cGO!"
+    5: "&f5"
+    4: "&f4"
+    3: "&d3"
+    2: "&d2"
+    1: "&d&l1"
+  CountdownSubtitle: "&7Get ready..."
+  Go: "&d&lGO!"
+  GoSubtitle: "&fFly through the &dpink &frings"
+  # After each lap but the last. {lap}, {total}, {time}
+  Lap: "&d&lLAP {lap}&7&l/&d&l{total}"
+  LapSubtitle: "&7{time}"
+  # After the second to last lap
+  FinalLap: "&d&lFINAL LAP"
+  FinalLapSubtitle: "&fBring it home!"
+  Crashed: "&c&lCRASHED"
+  CrashedSubtitle: "&fBack to your last ring"
+  # {position} is 1st, 2nd... {time} is the race time
+  Finished: "&d&l{position}"
+  FinishedSubtitle: "&fFinished in &d{time}"
 
+# {prefix} is replaced by Prefix below. Lines starting {center} are centred in chat.
 Messages:
+  Prefix: "&d&lPigRacing &8| &f"
+
+  # Sent to everyone while a race is taking sign-ups. Clicking any line joins.
+  # {time}, {seconds} ("second"/"seconds"), {players}, {laps}
   JoinRace:
+    - "{center}&d&m                                                            "
+    - "{center}&d&lPIG RACE"
+    - "{center}&fA race starts in &d{time} {seconds}&f!"
+    - "{center}&7{laps} laps  &8|  {players} joined so far"
     - ""
-    - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
-    - "&dA Pig-Race is starting in &f{time} seconds!"
-    - "&dClick here to join! Have fun racers!"
-    - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
-    - ""
-  JoinHover: "&d/race join"
+    - "{center}&d&l[ CLICK TO JOIN ]"
+    - "{center}&d&m                                                            "
+  JoinHover: "&fClick to join the race\n&7or type &d/race join"
   Joined:
+    - "{center}&d&m                                                            "
+    - "{center}&d&lYOU'RE IN!"
+    - "{center}&fThe race starts when sign-ups close."
+    - "{center}&7Leave any time with &d/race leave"
+    - "{center}&d&m                                                            "
+  JoinedBroadcast: "{prefix}&d{player} &fjoined the race &7({amount} racing)"
+  LeftBroadcast: "{prefix}&d{player} &fleft the race &7({amount} racing)"
+  Leave: "{prefix}&fYou left the race."
+  NoCurrentRace: "{prefix}&cThere's no race running right now."
+  AlreadyInRace: "{prefix}&cYou're already in this race."
+  AlreadyStarted: "{prefix}&cThis race has already started. Catch the next one!"
+  NotInRace: "{prefix}&cYou're not in a race."
+  # To the racers who did join
+  NotEnoughPlayers: "{prefix}&cNot enough racers joined. A race needs at least &f{min}&c."
+  RaceCancelled: "{prefix}&fThe pig race was cancelled: it needs at least &d{min} &fracers."
+  RaceVoided: "{prefix}&fThe pig race was called off: nobody is racing."
+  LapComplete: "{prefix}&fLap &d{lap}&7/&d{total} &fcomplete &8| &7{time}"
+  CompleteBroadcast: "{prefix}&d{player} &ffinished &d{position} &7({time})"
+  # Sent when the last racer finishes. {results} becomes one ResultLine per finisher.
+  RaceOver:
+    - "{center}&d&m                                                            "
+    - "{center}&d&lRACE RESULTS"
     - ""
-    - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
-    - "&dYou have joined the pig race! It will start"
-    - "&dsoon. To leave type &f/race leave&d!"
-    - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
+    - "{results}"
     - ""
-  JoinedBroadcast: "&d{player} &fhas joined the &drace&f! &d&oRacer {amount}"
-  Leave: "&cYou have left the race! :("
-  NoCurrentRace: "&cThere is no current race!"
-  AlreadyInRace: "&cYou are already in the race!"
-  AlreadyStarted: "&cThis race has already started!"
-  NotInRace: "&cYou are not in the race!"
-  NotEnoughPlayers: "&cNot enough racers joined: the race needs at least {min}."
-  RaceCancelled: "&cThe pig race was cancelled: it needs at least {min} racers."
-  RaceVoided: "&cThe pig race was called off: nobody is racing."
-  LapComplete: "&a&l&k000&r &dLap Complete! {lap}/{total} &a&l&k000"
-  CompleteBroadcast: "&f&l&k000&r &d{player} has completed the race! &6#{position} &f&k&l000"
-  RaceOver: "&dThe pig race is over! Thanks for racing."
-  GoneTooFar: "&cGet back to the race track you! -_-"
-  DismountMessage: "&cGet back on that pig you! -_- If you wish to leave type /race leave"
-  CommandBlocked: "&cYou can't use commands while racing! To leave type &f/race leave"
-  NoPermission: "&cYou don't have permission to do that."
-  PlayersOnly: "&cOnly players can do that."
+    - "{center}&7Thanks for racing!"
+    - "{center}&d&m                                                            "
+  ResultLine: "{center}&d&l{position}  &f{player}  &7{time}"
+  OutOfBounds: "{prefix}&cOut of bounds! &fBack to your last ring."
+  DismountMessage: "{prefix}&cYou can't get off mid-race. &fType &d/race leave &fto quit."
+  CommandBlocked: "{prefix}&cYou can't use that here. &fType &d/race leave &fto quit the race."
+  NoPermission: "{prefix}&cYou don't have permission to do that."
+  PlayersOnly: "{prefix}&cOnly players can do that."
   Help:
+    Header:
+      - "{center}&d&m                                                            "
+      - "{center}&d&lPIG RACING"
+      - ""
     Player:
-      - "&5&l-----------[&d&lPig-Racing&5&l]-----------"
-      - "&6/{label} join &d- Join the race that's starting"
-      - "&6/{label} leave &d- Leave the race"
+      - "&d/{label} join &8- &fJoin the race that's starting"
+      - "&d/{label} leave &8- &fLeave the race"
     Admin:
-      - "&6/{label} start &d- Start a race"
-      - "&6/{label} forcestart &d- Skip the join timer and start now"
-      - "&6/{label} stop &d- Stop the current race"
-      - "&6/{label} reload &d- Reload the config"
-      - "&6/{label} setwaitingloc &d- Set where racers wait, here"
-      - "&6/{label} setstartloc &d- Set the start line, here"
-      - "&6/{label} pos1 &d/ &6pos2 &d- Mark a checkpoint's corners, where you stand"
-      - "&6/{label} addcheckpoint &d- Add the marked checkpoint to the end of the track"
-      - "&6/{label} resetcheckpoints &d- Remove all checkpoints"
+      - ""
+      - "{center}&7Running races"
+      - "&d/{label} start &8- &fOpen a race for sign-ups"
+      - "&d/{label} forcestart &8- &fSkip the join timer and start now"
+      - "&d/{label} stop &8- &fStop the current race"
+      - "&d/{label} reload &8- &fReload the config"
+      - ""
+      - "{center}&7Building the track"
+      - "&d/{label} setwaitingloc &8- &fWhere racers wait, here"
+      - "&d/{label} setstartloc &8- &fThe start, here, facing where you look"
+      - "&d/{label} addcheckpoint [size] &8- &fA ring here, facing where you look"
+      - "&d/{label} removecheckpoint [n] &8- &fRemove a ring (the last by default)"
+      - "&d/{label} resetcheckpoints &8- &fRemove every ring"
+      - "&d/{label} preview &8- &fShow the rings while no race is on"
+      - "&d/{label} pos1 &7/ &dpos2 &8- &fMark the boundary's corners"
+      - "&d/{label} setboundary &7/ &dclearboundary &8- &fOptional race boundary"
+    Footer:
+      - "{center}&d&m                                                            "
   Admin:
-    Reloaded: "&aPigRacing reloaded."
-    LocationSet: "&aLocation set!"
-    CornerSet: "&aCorner {corner} set to {position}."
-    NeedSelection: "&cMark both corners first with /race pos1 and /race pos2."
-    SelectionWorlds: "&cBoth corners must be in the same world."
-    CheckpointAdded: "&aCheckpoint {number} added!"
-    CheckpointsReset: "&aCheckpoints removed!"
-    RaceAlreadyRunning: "&cA race is already running. Stop it first with /race stop."
-    CannotStart: "&cCan't start a race: {reason}"
-    RaceStopped: "&aRace stopped."
-    NothingToForceStart: "&cNo race is taking sign-ups. Open one with /race start first."
-    AlreadyUnderway: "&cThe race has already started."
-    ForceStarted: "&aStarting now with {players} racers."
-    ForceStartedEmpty: "&cNobody had joined, so the race was called off."
+    Reloaded: "{prefix}&fConfig reloaded."
+    LocationSet: "{prefix}&fLocation saved."
+    CornerSet: "{prefix}&fBoundary corner &d{corner} &fset to &d{position}&f."
+    NeedSelection: "{prefix}&cMark both corners first with &f/race pos1 &cand &f/race pos2&c."
+    SelectionWorlds: "{prefix}&cBoth corners have to be in the same world."
+    BoundarySet: "{prefix}&fBoundary saved &7({size})&f. Racers leaving it go back to their last ring."
+    BoundaryCleared: "{prefix}&fBoundary removed. Racers are kept near the start by distance instead."
+    StartOutsideBoundary: "{prefix}&cHeads up: the start location is outside this boundary."
+    # {number}, {size}, {direction}
+    CheckpointAdded: "{prefix}&fRing &d#{number} &fadded &7(size {size}, facing {direction})"
+    CheckpointRemoved: "{prefix}&fRing &d#{number} &fremoved. &7{count} left."
+    NoSuchCheckpoint: "{prefix}&cThere's no ring with that number. The track has &f{count}&c."
+    BadRingSize: "{prefix}&cRing size must be a whole number from 1 to {max}, e.g. &f/{label} addcheckpoint 3"
+    CheckpointsReset: "{prefix}&fEvery ring removed."
+    TrackInUse: "{prefix}&cA race is using the track. Stop it before changing the rings."
+    PreviewOn: "{prefix}&fShowing the track's &d{count} &frings. Run it again to hide them."
+    PreviewOff: "{prefix}&fTrack preview hidden."
+    RaceAlreadyRunning: "{prefix}&cA race is already running. Stop it first with &f/race stop&c."
+    CannotStart: "{prefix}&cCan't start a race: &f{reason}"
+    RaceStopped: "{prefix}&fRace stopped."
+    NothingToForceStart: "{prefix}&cNo race is taking sign-ups. Open one with &f/race start &cfirst."
+    AlreadyUnderway: "{prefix}&cThe race has already started."
+    ForceStarted: "{prefix}&fStarting now with &d{players} &fracers."
+    ForceStartedEmpty: "{prefix}&cNobody had joined, so the race was called off."
 
 Actionbar:
-  Waiting: "&cRace starting soon. &8Players: {players}"
-  InProgress: "&aRace Started     &dLaps Completed: {laps}/{total}"
-  RaceCompleted: "&aYou have completed the race! Your position: {position}"
+  # {players}, {min}, {time} (seconds left)
+  Waiting: "&fWaiting for racers  &8|  &d{players}&7/&d{min}  &8|  &fStarts in &d{time}s"
+  Starting: "&d&lGet ready..."
+  # {lap}, {total}, {ring} (rings passed this lap), {rings}, {speed} (top speed, blocks/s), {time}
+  Racing: "&fLap &d{lap}&7/&d{total}   &8|   &fRing &d{ring}&7/&d{rings}   &8|   &d{time}"
+  # {position}, {time}
+  Finished: "&fYou finished &d{position} &fin &d{time}"
 
 # Set with the admin commands above
 Data:

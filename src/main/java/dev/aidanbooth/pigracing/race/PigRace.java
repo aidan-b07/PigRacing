@@ -53,6 +53,8 @@ public class PigRace {
     private BukkitTask gathering;
     /** Seconds until joining closes, while waiting. */
     private int secondsLeft;
+    /** When GO was shown, for race times. */
+    private long goMillis;
 
     /** Checks a race can run here. Returns a reason it can't, or null if it can. */
     public static String validate(Main plugin) {
@@ -80,7 +82,7 @@ public class PigRace {
 
         plugin.race = this;
         startGathering();
-        repeat(this::updateActionbars, 20, 20);
+        repeat(this::updateActionbars, 5, 5);
     }
 
     public RaceState getGameState() {
@@ -158,7 +160,11 @@ public class PigRace {
     private void announceJoin(int seconds) {
         String hover = plugin.message("Messages.JoinHover");
         for (String line : plugin.messages("Messages.JoinRace")) {
-            BaseComponent[] text = TextComponent.fromLegacyText(line.replace("{time}", String.valueOf(seconds)));
+            line = Main.center(line.replace("{time}", String.valueOf(seconds))
+                    .replace("{seconds}", seconds == 1 ? "second" : "seconds")
+                    .replace("{players}", String.valueOf(racers.size()))
+                    .replace("{laps}", String.valueOf(laps)));
+            BaseComponent[] text = TextComponent.fromLegacyText(line);
             TextComponent component = new TextComponent(text);
             component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/race join"));
             component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText(hover)));
@@ -235,9 +241,10 @@ public class PigRace {
             public void run() {
                 if (counter > 0) {
                     String title = titles.get(counter);
+                    String subtitle = plugin.message("Titles.CountdownSubtitle");
                     for (Racer r : racers) {
                         if (title != null) {
-                            Titles.sendTitle(r.getPlayer(), 5, 10, 5, title, "");
+                            Titles.sendTitle(r.getPlayer(), 0, 20, 5, title, subtitle);
                         }
                         Sounds.play(r.getPlayer(), config, "Sounds.Countdown");
                     }
@@ -246,11 +253,13 @@ public class PigRace {
                 }
                 cancel();
                 String go = plugin.message("Titles.Go");
+                String goSubtitle = plugin.message("Titles.GoSubtitle");
                 for (Racer r : racers) {
-                    Titles.sendTitle(r.getPlayer(), 5, 10, 5, go, "");
+                    Titles.sendTitle(r.getPlayer(), 0, 25, 10, go, goSubtitle);
                     Sounds.play(r.getPlayer(), config, "Sounds.Go");
                 }
                 raceState = RaceState.INPROGRESS;
+                goMillis = System.currentTimeMillis();
                 repeat(PigRace.this::flyPigs, 1, 1);
                 repeat(PigRace.this::checkTooFar, 5, 5);
             }
@@ -289,8 +298,30 @@ public class PigRace {
             return;
         }
         raceState = RaceState.ENDED;
-        Bukkit.broadcastMessage(plugin.message("Messages.RaceOver"));
+        broadcastResults();
         Bukkit.getScheduler().runTaskLater(plugin, this::stop, 20L * Math.max(0, config.getInt("Settings.EndDelay", 5)));
+    }
+
+    /** The results board: the RaceOver lines, with a line per finisher where {results} is. */
+    private void broadcastResults() {
+        List<String> board = new ArrayList<>();
+        String resultLine = plugin.message("Messages.ResultLine");
+        for (String line : plugin.messages("Messages.RaceOver")) {
+            if (!line.contains("{results}")) {
+                board.add(Main.center(line));
+                continue;
+            }
+            for (int i = 0; i < completedRacers.size(); i++) {
+                Racer r = completedRacers.get(i);
+                board.add(Main.center(resultLine
+                        .replace("{position}", ordinal(i + 1))
+                        .replace("{player}", r.getPlayer().getName())
+                        .replace("{time}", formatTime(r.getFinishMillis() - goMillis))));
+            }
+        }
+        for (String line : board) {
+            Bukkit.broadcastMessage(line);
+        }
     }
 
     // ------------------------------------------------------------------ ticking
@@ -365,19 +396,55 @@ public class PigRace {
     }
 
     private void updateActionbars() {
-        String waiting = plugin.message("Actionbar.Waiting");
-        String inProgress = plugin.message("Actionbar.InProgress");
-        String completed = plugin.message("Actionbar.RaceCompleted");
         for (Racer r : racers) {
             String text;
             if (raceState == RaceState.WAITING) {
-                text = waiting.replace("{players}", String.valueOf(racers.size()));
-            } else if (!r.inGame() && completedRacers.contains(r)) {
-                text = completed.replace("{position}", String.valueOf(getRacerPosition(r)));
+                text = plugin.message("Actionbar.Waiting")
+                        .replace("{players}", String.valueOf(racers.size()))
+                        .replace("{min}", String.valueOf(getMinPlayers()))
+                        .replace("{time}", String.valueOf(Math.max(0, secondsLeft)));
+            } else if (raceState == RaceState.STARTING) {
+                text = plugin.message("Actionbar.Starting");
+            } else if (completedRacers.contains(r)) {
+                text = plugin.message("Actionbar.Finished")
+                        .replace("{position}", ordinal(getRacerPosition(r)))
+                        .replace("{time}", formatTime(r.getFinishMillis() - goMillis));
+            } else if (raceState == RaceState.INPROGRESS) {
+                text = plugin.message("Actionbar.Racing")
+                        .replace("{lap}", String.valueOf(Math.min(laps, r.getLap() + 1)))
+                        .replace("{total}", String.valueOf(laps))
+                        .replace("{ring}", String.valueOf(Math.min(r.getCheckpoint(), checkpoints.size())))
+                        .replace("{rings}", String.valueOf(checkpoints.size()))
+                        .replace("{speed}", String.format(java.util.Locale.ROOT, "%.1f", plugin.getFlight().topSpeed(r) * 20))
+                        .replace("{time}", formatTime(System.currentTimeMillis() - goMillis));
             } else {
-                text = inProgress.replace("{laps}", String.valueOf(r.getLap())).replace("{total}", String.valueOf(laps));
+                continue;
             }
             ActionBar.sendActionBar(r.getPlayer(), text);
+        }
+    }
+
+    /** 83450 ms as "1:23.4". */
+    static String formatTime(long millis) {
+        long tenths = Math.max(0, millis) / 100;
+        return (tenths / 600) + ":" + String.format(java.util.Locale.ROOT, "%02d", (tenths / 10) % 60) + "." + (tenths % 10);
+    }
+
+    /** 1 as "1st", 12 as "12th", 22 as "22nd". */
+    static String ordinal(int n) {
+        int mod100 = n % 100;
+        if (mod100 >= 11 && mod100 <= 13) {
+            return n + "th";
+        }
+        switch (n % 10) {
+            case 1:
+                return n + "st";
+            case 2:
+                return n + "nd";
+            case 3:
+                return n + "rd";
+            default:
+                return n + "th";
         }
     }
 
@@ -414,6 +481,7 @@ public class PigRace {
     public void crashed(Racer racer) {
         sendBack(racer, lastSafePlace(racer));
         Sounds.play(racer.getPlayer(), config, "Sounds.Crash");
+        Titles.sendTitle(racer.getPlayer(), 0, 20, 10, plugin.message("Titles.Crashed"), plugin.message("Titles.CrashedSubtitle"));
     }
 
     /** Just past the last ring the racer flew through, facing on, or the start line before any. */
@@ -447,17 +515,30 @@ public class PigRace {
         racer.setCheckpoint(1);
         racer.addLap();
         Sounds.play(racer.getPlayer(), config, "Sounds.Lap");
-        racer.getPlayer().sendMessage(plugin.message("Messages.LapComplete")
-                .replace("{lap}", String.valueOf(racer.getLap())).replace("{total}", String.valueOf(laps)));
+        Player player = racer.getPlayer();
+        String time = formatTime(System.currentTimeMillis() - goMillis);
         if (racer.getLap() < laps) {
+            String lap = String.valueOf(racer.getLap());
+            String total = String.valueOf(laps);
+            player.sendMessage(plugin.message("Messages.LapComplete")
+                    .replace("{lap}", lap).replace("{total}", total).replace("{time}", time));
+            boolean finalLap = racer.getLap() == laps - 1;
+            Titles.sendTitle(player, 0, 30, 10,
+                    plugin.message(finalLap ? "Titles.FinalLap" : "Titles.Lap").replace("{lap}", lap).replace("{total}", total),
+                    plugin.message(finalLap ? "Titles.FinalLapSubtitle" : "Titles.LapSubtitle").replace("{lap}", lap).replace("{total}", total).replace("{time}", time));
             return;
         }
 
+        racer.setFinishMillis(System.currentTimeMillis());
         completedRacers.add(racer);
+        String position = ordinal(getRacerPosition(racer));
+        Titles.sendTitle(player, 0, 50, 15, plugin.message("Titles.Finished").replace("{position}", position),
+                plugin.message("Titles.FinishedSubtitle").replace("{position}", position).replace("{time}", time));
         releaseRacer(racer, true);
         Bukkit.broadcastMessage(plugin.message("Messages.CompleteBroadcast")
-                .replace("{player}", racer.getPlayer().getName())
-                .replace("{position}", String.valueOf(getRacerPosition(racer))));
+                .replace("{player}", player.getName())
+                .replace("{position}", position)
+                .replace("{time}", time));
         endWhenEveryoneFinished();
     }
 
@@ -494,7 +575,7 @@ public class PigRace {
         racers.add(new Racer(player));
         player.teleport(waitLocation);
         for (String s : plugin.messages("Messages.Joined")) {
-            player.sendMessage(s);
+            player.sendMessage(Main.center(s.replace("{min}", String.valueOf(getMinPlayers()))));
         }
         Bukkit.broadcastMessage(plugin.message("Messages.JoinedBroadcast")
                 .replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
@@ -509,6 +590,10 @@ public class PigRace {
                 it.remove();
                 if (messages) {
                     player.sendMessage(plugin.message("Messages.Leave"));
+                }
+                if (raceState == RaceState.WAITING) {
+                    Bukkit.broadcastMessage(plugin.message("Messages.LeftBroadcast")
+                            .replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
                 }
                 if (raceState == RaceState.STARTING || raceState == RaceState.INPROGRESS) {
                     endWhenEveryoneFinished();
