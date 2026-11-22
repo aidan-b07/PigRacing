@@ -25,6 +25,24 @@ Settings:
   SafeGroundBlocks:
     - "*CARPET"
 
+# Prizes for racers who finish. Each entry is a list of commands run from the console, no slash.
+# Placeholders: {player} name, {uuid}, {position} (1, 2, 3), {place} (1st, 2nd, 3rd), {time} race time,
+# {racers} how many raced. Racers who leave, or who haven't finished when the race ends, get nothing.
+Rewards:
+  # By finishing place. List as many places as you like; places not listed get nothing extra.
+  # For example:
+  #   Places:
+  #     1:
+  #       - "give {player} diamond 3"
+  #       - "say {player} won the pig race in {time}!"
+  #     2:
+  #       - "give {player} gold_ingot 5"
+  #     3:
+  #       - "give {player} iron_ingot 5"
+  Places: {}
+  # Run for everyone who finishes, after their place's commands
+  AllFinishers: []
+
 # Which commands players in a race may use. /race always works, so anyone can leave.
 # Mode "whitelist": only the listed commands work. Mode "blacklist": everything but them works.
 # Names without the slash; "plugin:command" forms are matched by the part after the colon.

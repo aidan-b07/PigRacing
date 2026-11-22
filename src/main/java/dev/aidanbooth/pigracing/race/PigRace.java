@@ -577,7 +577,46 @@ public class PigRace {
                 .replace("{player}", player.getName())
                 .replace("{position}", position)
                 .replace("{time}", time));
+        // After the teleport back, so any items land in the waiting area
+        giveRewards(racer, getRacerPosition(racer), time);
         endWhenEveryoneFinished();
+    }
+
+    /**
+     * Runs the admin's reward commands from the console for a racer who finished: their place's
+     * commands from Rewards.Places, then Rewards.AllFinishers. One bad command doesn't stop the rest.
+     */
+    private void giveRewards(Racer racer, int position, String time) {
+        List<String> commands = new ArrayList<>();
+        ConfigurationSection places = config.getConfigurationSection("Rewards.Places");
+        if (places != null) {
+            commands.addAll(places.getStringList(String.valueOf(position)));
+        }
+        commands.addAll(config.getStringList("Rewards.AllFinishers"));
+
+        Player player = racer.getPlayer();
+        for (String raw : commands) {
+            String command = raw == null ? "" : raw.trim();
+            if (command.startsWith("/")) {
+                command = command.substring(1);
+            }
+            if (command.isEmpty()) {
+                continue;
+            }
+            command = command.replace("{player}", player.getName())
+                    .replace("{uuid}", player.getUniqueId().toString())
+                    .replace("{position}", String.valueOf(position))
+                    .replace("{place}", ordinal(position))
+                    .replace("{time}", time)
+                    .replace("{racers}", String.valueOf(racers.size()));
+            try {
+                if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)) {
+                    plugin.getLogger().warning("Reward command for " + player.getName() + " isn't a known command: /" + command);
+                }
+            } catch (RuntimeException e) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING, "Reward command for " + player.getName() + " failed: /" + command, e);
+            }
+        }
     }
 
     /** Takes a racer out of play: removes their pig and, if asked, sends them to the waiting area. */
