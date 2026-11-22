@@ -1,0 +1,19 @@
+# IntelliJ (shared run configurations live in .run/)
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Maven
+target/
+dependency-reduced-pom.xml
+
+# Shared test servers: run/ is a link to ../mc-servers
+run/
+
+# Misc
+*.log
+hs_err_pid*
+Thumbs.db
+.DS_Store

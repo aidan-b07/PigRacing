@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.superdevelopment</groupId>
+    <groupId>dev.aidanbooth</groupId>
     <artifactId>pigracing</artifactId>
     <version>1.0</version>
     <packaging>jar</packaging>
@@ -14,6 +14,13 @@
     <properties>
         <java.version>1.8</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Test servers are shared with Super-Report and Extractors: run/ is a link to ../mc-servers.
+             Defaults to 1.8.8, the only shared server this plugin (NMS v1_8_R3) runs on.
+             Skip with -Dserver.skip=true -->
+        <server.version>1.8.8</server.version>
+        <server.skip>false</server.skip>
+        <run.dir>${project.basedir}/run</run.dir>
     </properties>
 
     <build>
@@ -43,6 +50,34 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- After shading: install into the test server, using Super-Report's script -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>deploy-to-test-server</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${server.skip}</skip>
+                            <target>
+                                <ant antfile="${project.basedir}/../Super-Report/tools/test-server.xml" inheritAll="false">
+                                    <property name="server.version" value="${server.version}"/>
+                                    <property name="server.dir" value="${run.dir}/${server.version}"/>
+                                    <property name="plugin.jar" value="${project.build.directory}/${project.build.finalName}.jar"/>
+                                    <property name="plugin.name" value="PigRacing.jar"/>
+                                    <property name="eula.file" value="${run.dir}/eula.txt"/>
+                                    <property name="work.dir" value="${project.build.directory}"/>
+                                </ant>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
         <resources>
             <resource>
@@ -65,13 +100,19 @@
             <id>codemc-repo</id>
             <url>https://repo.codemc.io/repository/maven-public/</url>
         </repository>
+        <!-- Full Spigot 1.8.8 jar (with NMS v1_8_R3); spigotmc-repo only has the API -->
+        <repository>
+            <id>codemc-nms</id>
+            <url>https://repo.codemc.io/repository/nms/</url>
+        </repository>
+        <!-- TextAPI: its Bintray repo is gone, JitPack builds it from GitHub -->
+        <repository>
+            <id>jitpack</id>
+            <url>https://jitpack.io</url>
+        </repository>
         <repository>
             <id>enginehub-maven</id>
             <url>https://maven.enginehub.org/repo/</url>
-        </repository>
-        <repository>
-            <id>textapi-repo</id>
-            <url>https://dl.bintray.com/luca98/plugins/</url>
         </repository>
     </repositories>
 
@@ -89,9 +130,15 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>io.github.theluca98</groupId>
+            <groupId>com.github.TheLuca98</groupId>
             <artifactId>TextAPI</artifactId>
-            <version>1.12.2-R2.2</version>
+            <version>v1.12.2-R2.2</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.github.fierioziy.particlenativeapi</groupId>
