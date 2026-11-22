@@ -73,24 +73,35 @@ Flight:
   KnockbackStrength: 1.0
   KnockbackFade: 0.7
 
-# Checkpoint rings, drawn in particles. Each racer's next ring is highlighted.
+# Checkpoint rings, drawn in animated particles. Each racer's next ring is highlighted.
 Rings:
   Enabled: true
   # Size used by /race addcheckpoint when none is given. A size 3 ring fits a 3x3 opening.
   DefaultSize: 3
-  # Ticks between redraws. Lower looks more solid but sends more particles.
+  # Ticks between redraws. Lower looks smoother but sends more particles.
   Interval: 2
   # Only rings this close to a player are drawn for them
   ViewDistance: 48
-  # Blocks between particles around a ring
-  Spacing: 0.5
-  RingColor: "#FFFFFF"
-  # The ring a racer has to fly through next: denser, pink, with sparkles circling inside it
-  NextSpacing: 0.25
-  NextRingColor: "#FF55FF"
-  SparkleColor: "#FFFFFF"
-  Sparkles: 4
-  SpinSpeed: 0.15
+  # The two colours everything alternates between
+  Color: "#FF55FF"
+  SecondColor: "#FFFFFF"
+
+  # Every ring: a faint outline (blocks between particles, 0 for none) and comets orbiting the rim
+  OutlineSpacing: 1.2
+  Comets: 4
+  # Particles per comet, head included
+  CometLength: 4
+  SpinSpeed: 0.12
+
+  # The ring a racer needs next: a dense breathing outline, faster comets, and a ripple that
+  # shrinks from the rim to the centre
+  NextOutlineSpacing: 0.3
+  NextComets: 4
+  NextCometLength: 7
+  NextSpinSpeed: 0.25
+  Ripple: true
+  # How much of the way in the ripple moves each redraw (0.05 = one ripple every 20 redraws)
+  RippleSpeed: 0.05
 
 # Sound names are modern Minecraft names; older servers get the closest match. Use "none" for silence.
 Sounds:

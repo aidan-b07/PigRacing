@@ -11,32 +11,43 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Draws the checkpoint rings in particles, to each player separately:
- * <ul>
- *     <li>A racer sees every ring, with the one they need next drawn brighter, denser and with
- *     sparkles circling it, so it's obvious where to go.</li>
- *     <li>Anyone else sees the plain rings while a race is on.</li>
- *     <li>Admins previewing the track ({@code /race preview}) see them any time.</li>
- * </ul>
+ * Draws the checkpoint rings in animated particles, to each player separately.
+ *
+ * <p>Every ring has a faint outline, so its size is clear, and comets with fading tails orbiting the
+ * rim in alternating pink and white. Neighbouring rings spin opposite ways.
+ *
+ * <p>The ring a racer needs next stands out: a dense pink outline that gently breathes, faster
+ * comets with longer tails, and a white ripple that keeps shrinking from the rim to the centre,
+ * pulling the eye through it.
+ *
+ * <p>Racers see every ring with their next one highlighted; anyone else sees the plain rings while a
+ * race is on; admins previewing the track ({@code /race preview}) see them any time.
  */
 public final class RingRenderer implements Runnable {
     private final Main plugin;
     private final Set<UUID> previewing = new HashSet<>();
-    private double spin;
+    /** Advances every redraw; everything that moves is worked out from it. */
+    private double time;
 
     private boolean enabled;
     private double viewDistance;
-    private double spacing;
-    private double nextSpacing;
-    private Color ringColor;
-    private Color nextColor;
-    private Color sparkleColor;
-    private int sparkles;
+    private Color color;
+    private Color secondColor;
+    private double outlineSpacing;
+    private int comets;
+    private int cometLength;
     private double spinSpeed;
+    private double nextOutlineSpacing;
+    private int nextComets;
+    private int nextCometLength;
+    private double nextSpinSpeed;
+    private boolean ripple;
+    private double rippleSpeed;
 
     public RingRenderer(Main plugin) {
         this.plugin = plugin;
@@ -45,13 +56,18 @@ public final class RingRenderer implements Runnable {
     public void reload(ConfigurationSection config) {
         enabled = config.getBoolean("Enabled", true);
         viewDistance = config.getDouble("ViewDistance", 48);
-        spacing = Math.max(0.15, config.getDouble("Spacing", 0.5));
-        nextSpacing = Math.max(0.1, config.getDouble("NextSpacing", 0.25));
-        ringColor = parseColor(config.getString("RingColor"), Color.WHITE);
-        nextColor = parseColor(config.getString("NextRingColor"), Color.fromRGB(0xFF55FF));
-        sparkleColor = parseColor(config.getString("SparkleColor"), Color.WHITE);
-        sparkles = Math.max(0, config.getInt("Sparkles", 4));
-        spinSpeed = config.getDouble("SpinSpeed", 0.15);
+        color = parseColor(config.getString("Color"), Color.fromRGB(0xFF55FF));
+        secondColor = parseColor(config.getString("SecondColor"), Color.WHITE);
+        outlineSpacing = config.getDouble("OutlineSpacing", 1.2);
+        comets = Math.max(0, config.getInt("Comets", 4));
+        cometLength = Math.max(1, config.getInt("CometLength", 4));
+        spinSpeed = config.getDouble("SpinSpeed", 0.12);
+        nextOutlineSpacing = config.getDouble("NextOutlineSpacing", 0.3);
+        nextComets = Math.max(0, config.getInt("NextComets", 4));
+        nextCometLength = Math.max(1, config.getInt("NextCometLength", 7));
+        nextSpinSpeed = config.getDouble("NextSpinSpeed", 0.25);
+        ripple = config.getBoolean("Ripple", true);
+        rippleSpeed = Math.max(0.005, config.getDouble("RippleSpeed", 0.05));
     }
 
     /** Turns the track preview on or off for a player. Returns whether it's now on. */
@@ -73,11 +89,12 @@ public final class RingRenderer implements Runnable {
         if (!enabled || track.size() == 0) {
             return;
         }
-        spin += spinSpeed;
+        time += 1;
         PigRace race = plugin.race;
         boolean raceOn = race != null
                 && (race.getGameState() == RaceState.STARTING || race.getGameState() == RaceState.INPROGRESS);
 
+        List<Checkpoint> rings = track.all();
         for (Player player : Bukkit.getOnlinePlayers()) {
             Checkpoint next = null;
             Racer racer = race == null ? null : race.getRacer(player);
@@ -87,40 +104,87 @@ public final class RingRenderer implements Runnable {
                 continue;
             }
             Location eye = player.getLocation();
-            for (Checkpoint ring : track.all()) {
+            for (int i = 0; i < rings.size(); i++) {
+                Checkpoint ring = rings.get(i);
                 if (ring.distanceSquared(eye) > viewDistance * viewDistance) {
                     continue;
                 }
+                // Alternate rings spin opposite ways
+                double direction = i % 2 == 0 ? 1 : -1;
                 if (ring == next) {
-                    drawNext(player, ring);
+                    drawNext(player, ring, direction);
                 } else {
-                    drawRing(player, ring, ringColor, spacing, 0, 1f);
+                    drawPlain(player, ring, direction);
                 }
             }
         }
     }
 
-    private void drawNext(Player player, Checkpoint ring) {
-        drawRing(player, ring, nextColor, nextSpacing, spin * 0.25, 1.4f);
-        World world = player.getWorld();
+    private void drawPlain(Player player, Checkpoint ring, double direction) {
         double r = ring.getRadius();
-        for (int i = 0; i < sparkles; i++) {
-            double angle = spin + i * 2 * Math.PI / sparkles;
-            // Just inside the rim, so they read as part of the ring and not a second one
-            Vector at = ring.pointOnFace(Math.cos(angle) * (r - 0.25), Math.sin(angle) * (r - 0.25));
-            DustParticles.show(player, at.toLocation(world), sparkleColor, 1.6f);
+        if (outlineSpacing > 0) {
+            drawCircle(player, ring, r, secondColor, outlineSpacing, 0, 0.7f);
+        }
+        drawComets(player, ring, r, comets, cometLength, time * spinSpeed * direction, direction);
+    }
+
+    private void drawNext(Player player, Checkpoint ring, double direction) {
+        double r = ring.getRadius();
+        // Breathes in and out about once every two seconds at the default redraw rate
+        double breath = (Math.sin(time * 0.3) + 1) / 2;
+        if (nextOutlineSpacing > 0) {
+            drawCircle(player, ring, r, color, nextOutlineSpacing, time * 0.02 * direction, (float) (1.0 + 0.6 * breath));
+        }
+        drawComets(player, ring, r, nextComets, nextCometLength, time * nextSpinSpeed * direction, direction);
+        if (ripple) {
+            // Shrinks from the rim to a quarter of the way in, then starts again at the rim
+            double phase = (time * rippleSpeed) % 1;
+            double rippleRadius = r * (1 - 0.75 * phase);
+            Color fade = mix(secondColor, color, phase);
+            drawCircle(player, ring, rippleRadius, fade, 0.45, 0, (float) (1.1 - 0.6 * phase));
         }
     }
 
-    private void drawRing(Player player, Checkpoint ring, Color color, double gap, double offset, float size) {
+    /** Comets around the rim: a bright head with a tail that shrinks and fades towards the other colour. */
+    private void drawComets(Player player, Checkpoint ring, double r, int count, int length, double angle, double direction) {
+        if (count == 0 || r <= 0) {
+            return;
+        }
         World world = player.getWorld();
-        double r = ring.getRadius();
+        // About 0.3 blocks between tail points whatever the ring's size
+        double step = 0.3 / r;
+        for (int c = 0; c < count; c++) {
+            Color head = c % 2 == 0 ? color : secondColor;
+            Color tail = c % 2 == 0 ? secondColor : color;
+            double start = angle + c * 2 * Math.PI / count;
+            for (int t = 0; t < length; t++) {
+                double fraction = length == 1 ? 0 : (double) t / (length - 1);
+                double a = start - t * step * direction;
+                Vector at = ring.pointOnFace(Math.cos(a) * r, Math.sin(a) * r);
+                DustParticles.show(player, at.toLocation(world), mix(head, tail, fraction * 0.7), (float) (1.6 - 1.1 * fraction));
+            }
+        }
+    }
+
+    private void drawCircle(Player player, Checkpoint ring, double r, Color colour, double gap, double offset, float size) {
+        if (r <= 0) {
+            return;
+        }
+        World world = player.getWorld();
         int points = Math.max(8, (int) Math.round(2 * Math.PI * r / gap));
         for (int i = 0; i < points; i++) {
-            double angle = offset + i * 2 * Math.PI / points;
-            Vector at = ring.pointOnFace(Math.cos(angle) * r, Math.sin(angle) * r);
-            DustParticles.show(player, at.toLocation(world), color, size);
+            double a = offset + i * 2 * Math.PI / points;
+            Vector at = ring.pointOnFace(Math.cos(a) * r, Math.sin(a) * r);
+            DustParticles.show(player, at.toLocation(world), colour, size);
         }
+    }
+
+    private static Color mix(Color from, Color to, double amount) {
+        double t = Math.max(0, Math.min(1, amount));
+        return Color.fromRGB(
+                (int) Math.round(from.getRed() + (to.getRed() - from.getRed()) * t),
+                (int) Math.round(from.getGreen() + (to.getGreen() - from.getGreen()) * t),
+                (int) Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * t));
     }
 
     private static Color parseColor(String hex, Color fallback) {
