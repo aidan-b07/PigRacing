@@ -102,15 +102,79 @@ public final class Entities {
     }
 
     /**
-     * Moves a rider and its mount together. A ridden entity can't be teleported, so this unmounts,
-     * moves both and mounts again.
+     * Moves a rider and its mount to the same place, unmounted: a ridden entity can't be teleported.
+     * Mount them again a tick later, once the rider's client has caught up (see {@link #stuckAfterTeleport}).
      */
-    public static void teleportMounted(Entity vehicle, Entity rider, Location to) {
+    public static void teleportApart(Entity vehicle, Entity rider, Location to) {
         vehicle.eject();
         vehicle.teleport(to);
-        rider.teleport(to);
         vehicle.setVelocity(new org.bukkit.util.Vector());
-        mount(vehicle, rider);
+        rider.teleport(to);
+    }
+
+    /**
+     * 1.8 only. After a teleport the server ignores a player's movement and looking until their client
+     * confirms the new position, and a client riding a mount doesn't always send that confirmation. Then
+     * the server never sees them look around again, and their pig can't be steered. Returns true while
+     * the server is still waiting; always false on newer versions, which don't have this problem.
+     */
+    public static boolean stuckAfterTeleport(org.bukkit.entity.Player player) {
+        return LegacyTeleport.waiting(player);
+    }
+
+    /** Stops the server waiting for a teleport confirmation that isn't coming. */
+    public static void unstick(org.bukkit.entity.Player player) {
+        LegacyTeleport.release(player);
+    }
+
+    private static final class LegacyTeleport {
+        private static boolean unavailable;
+        private static Method getHandle;
+        private static java.lang.reflect.Field connection;
+        private static java.lang.reflect.Field checkMovement;
+
+        private static Object connectionOf(org.bukkit.entity.Player player) throws ReflectiveOperationException {
+            if (getHandle == null) {
+                getHandle = player.getClass().getMethod("getHandle");
+                Object handle = getHandle.invoke(player);
+                connection = handle.getClass().getField("playerConnection");
+                Class<?> type = connection.getType();
+                if (!type.getName().contains("v1_8_R")) {
+                    unavailable = true;
+                    return null;
+                }
+                checkMovement = type.getDeclaredField("checkMovement");
+                checkMovement.setAccessible(true);
+            }
+            return connection.get(getHandle.invoke(player));
+        }
+
+        static boolean waiting(org.bukkit.entity.Player player) {
+            if (unavailable) {
+                return false;
+            }
+            try {
+                Object conn = connectionOf(player);
+                return conn != null && !checkMovement.getBoolean(conn);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                unavailable = true;
+                return false;
+            }
+        }
+
+        static void release(org.bukkit.entity.Player player) {
+            if (unavailable) {
+                return;
+            }
+            try {
+                Object conn = connectionOf(player);
+                if (conn != null) {
+                    checkMovement.setBoolean(conn, true);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                unavailable = true;
+            }
+        }
     }
 
     private static Method find(Class<?> owner, String name, Class<?>... args) {

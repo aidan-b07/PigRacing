@@ -17,6 +17,8 @@ import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.util.Vector;
 import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -210,6 +212,7 @@ public class PigRace {
             r.setInGame(true);
         }
 
+        repeat(this::unstickRacers, 1, 1);
         startCountdown();
     }
 
@@ -493,13 +496,48 @@ public class PigRace {
 
     private void sendBack(Racer racer, Location to) {
         Player player = racer.getPlayer();
+        LivingEntity pig = racer.getPig();
         allowedDismounts.add(player.getUniqueId());
         try {
-            Entities.teleportMounted(racer.getPig(), player, to);
+            Entities.teleportApart(pig, player, to);
         } finally {
             allowedDismounts.remove(player.getUniqueId());
         }
         racer.resetSpeed(plugin.getFlight().getRespawnHoverTicks());
+        // Mounting in the same tick as the teleport can leave a 1.8 client unable to steer, so the
+        // rider gets back on next tick, with the pig put back where it was sent in case it slipped
+        tasks.add(Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!racer.inGame() || pig == null || !pig.isValid() || !player.isOnline()) {
+                return;
+            }
+            pig.teleport(to);
+            pig.setVelocity(new Vector());
+            Entities.face(pig, to.getYaw(), 0);
+            Entities.mount(pig, player);
+            racer.setLastPigLocation(null);
+        }, 1));
+    }
+
+    /**
+     * The safety net for the 1.8 teleport problem in {@link Entities#stuckAfterTeleport}: a racer on
+     * their pig whose client hasn't confirmed a teleport for half a second never will, so stop waiting.
+     */
+    private void unstickRacers() {
+        for (Racer r : racers) {
+            if (!r.inGame() || r.getPig() == null) {
+                continue;
+            }
+            Player player = r.getPlayer();
+            boolean riding = player.getVehicle() != null && player.getVehicle().getUniqueId().equals(r.getPig().getUniqueId());
+            if (riding && Entities.stuckAfterTeleport(player)) {
+                if (r.addStuckTick() >= 10) {
+                    Entities.unstick(player);
+                    r.resetStuckTicks();
+                }
+            } else {
+                r.resetStuckTicks();
+            }
+        }
     }
 
     /** A racer flew through their next checkpoint. */
