@@ -1,13 +1,101 @@
+# PigRacing configuration
+# Colour codes use &. Speeds are in blocks per tick (20 ticks = 1 second).
+
+Settings:
+  # Laps to finish the race
+  Laps: 3
+  # Seconds players have to join after /race start
+  JoinTime: 60
+  # Seconds left when the join message is repeated in chat
+  AnnounceAt: [30, 10, 5, 4, 3, 2, 1]
+  # Fewer racers than this when joining closes cancels the race
+  MinPlayers: 1
+  # Seconds between the last racer finishing and everyone being sent back
+  EndDelay: 5
+  # Racers this far from the start (or in another world) are sent back to it
+  MaxDistanceFromStart: 150
+  # Blocks above a checkpoint's centre that a crashed racer respawns at
+  RespawnHeight: 2
+  # Racers can't be hurt while racing
+  ProtectRacers: true
+  # Ticks a pig may sit on the ground at the start or after respawning before it counts as a crash
+  GroundGraceTicks: 60
+  # Pigs can land on these without crashing. * matches anything, e.g. "*_CARPET"
+  SafeGroundBlocks:
+    - "*CARPET"
+  # Commands racers may still use. Everything else is blocked during a race.
+  AllowedCommands:
+    - race
+    - pr
+    - pigrace
+    - pigracing
+
+Flight:
+  # Forward speed with no checkpoints passed
+  BaseSpeed: 0.4
+  # Extra speed for every checkpoint passed since the pig last touched the ground
+  SpeedPerCheckpoint: 0.03
+  MaxSpeed: 0.9
+  # true: hold W to fly forward. false: the pig always flies forward.
+  RequireForwardKey: true
+  # Holding space adds this much upward speed each tick, up to ClimbSpeed
+  ClimbAcceleration: 0.4
+  ClimbSpeed: 0.1
+  # Not holding space removes this much each tick, down to -MaxFallSpeed
+  Gravity: 0.08
+  MaxFallSpeed: 0.3
+  # How hard a racer punching another racer's pig knocks it, and how fast that fades (0-0.95)
+  KnockbackStrength: 1.0
+  KnockbackFade: 0.7
+
+Particles:
+  Enabled: true
+  # Spinning ring around each checkpoint
+  Radius: 3
+  Speed: 0.06
+  Color: "#FF00FF"
+  SecondColor: "#FFFFFF"
+  # Only players this close to a checkpoint see its particles
+  ViewDistance: 40
+
+# Sound names are modern Minecraft names; older servers get the closest match. Use "none" for silence.
+Sounds:
+  Countdown:
+    sound: BLOCK_NOTE_BLOCK_BASS
+    volume: 1.0
+    pitch: 1.0
+  Go:
+    sound: BLOCK_NOTE_BLOCK_PLING
+    volume: 1.0
+    pitch: 1.5
+  Checkpoint:
+    sound: ENTITY_PLAYER_LEVELUP
+    volume: 1.0
+    pitch: 1.0
+  Crash:
+    sound: ENTITY_VILLAGER_DEATH
+    volume: 1.0
+    pitch: 1.0
+
+Titles:
+  # Shown before the start, counting down from the highest number
+  Countdown:
+    5: "&a5"
+    4: "&a4"
+    3: "&63"
+    2: "&62"
+    1: "&c1"
+  Go: "&cGO!"
+
 Messages:
   JoinRace:
     - ""
     - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     - "&dA Pig-Race is starting in &f{time} seconds!"
-    - "&dClear your inventory and click here to"
-    - "&djoin! Have fun racers!"
+    - "&dClick here to join! Have fun racers!"
     - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     - ""
-  InventoryNotEmpty: "&cYou can't join the race as your inventory is not empty!"
+  JoinHover: "&d/race join"
   Joined:
     - ""
     - "&5=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
@@ -19,18 +107,49 @@ Messages:
   Leave: "&cYou have left the race! :("
   NoCurrentRace: "&cThere is no current race!"
   AlreadyInRace: "&cYou are already in the race!"
+  AlreadyStarted: "&cThis race has already started!"
   NotInRace: "&cYou are not in the race!"
-  LapComplete: "&a&l&k000&r &dLap Complete! {lap}/3 &a&l&k000"
+  NotEnoughPlayers: "&cThe pig race was cancelled: it needs at least {min} racers."
+  LapComplete: "&a&l&k000&r &dLap Complete! {lap}/{total} &a&l&k000"
   CompleteBroadcast: "&f&l&k000&r &d{player} has completed the race! &6#{position} &f&k&l000"
+  RaceOver: "&dThe pig race is over! Thanks for racing."
   GoneTooFar: "&cGet back to the race track you! -_-"
   DismountMessage: "&cGet back on that pig you! -_- If you wish to leave type /race leave"
+  CommandBlocked: "&cYou can't use commands while racing! To leave type &f/race leave"
+  NoPermission: "&cYou don't have permission to do that."
+  PlayersOnly: "&cOnly players can do that."
+  Help:
+    Player:
+      - "&5&l-----------[&d&lPig-Racing&5&l]-----------"
+      - "&6/{label} join &d- Join the race that's starting"
+      - "&6/{label} leave &d- Leave the race"
+    Admin:
+      - "&6/{label} start &d- Start a race"
+      - "&6/{label} stop &d- Stop the current race"
+      - "&6/{label} reload &d- Reload the config"
+      - "&6/{label} setwaitingloc &d- Set where racers wait, here"
+      - "&6/{label} setstartloc &d- Set the start line, here"
+      - "&6/{label} pos1 &d/ &6pos2 &d- Mark a checkpoint's corners, where you stand"
+      - "&6/{label} addcheckpoint &d- Add the marked checkpoint to the end of the track"
+      - "&6/{label} resetcheckpoints &d- Remove all checkpoints"
+  Admin:
+    Reloaded: "&aPigRacing reloaded."
+    LocationSet: "&aLocation set!"
+    CornerSet: "&aCorner {corner} set to {position}."
+    NeedSelection: "&cMark both corners first with /race pos1 and /race pos2."
+    SelectionWorlds: "&cBoth corners must be in the same world."
+    CheckpointAdded: "&aCheckpoint {number} added!"
+    CheckpointsReset: "&aCheckpoints removed!"
+    RaceAlreadyRunning: "&cA race is already running. Stop it first with /race stop."
+    CannotStart: "&cCan't start a race: {reason}"
+    RaceStopped: "&aRace stopped."
 
 Actionbar:
   Waiting: "&cRace starting soon. &8Players: {players}"
-  InProgress: "&aRace Started     &dLaps Completed: {laps}/3"
+  InProgress: "&aRace Started     &dLaps Completed: {laps}/{total}"
   RaceCompleted: "&aYou have completed the race! Your position: {position}"
 
+# Set with the admin commands above
 Data:
-  WaitingLocation: null
-  StartLocation: null
-  Powerups: [ ]
+  WaitingLocation: ""
+  StartLocation: ""

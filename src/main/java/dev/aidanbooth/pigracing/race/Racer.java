@@ -1,69 +1,129 @@
 package dev.aidanbooth.pigracing.race;
 
-import com.sk89q.worldedit.bukkit.selections.CuboidSelection;
-import dev.aidanbooth.pigracing.listeners.checkpoint.CheckpointParticleHandler;
+import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-
-import java.util.HashMap;
+import org.bukkit.util.Vector;
 
 public class Racer {
-    private CheckpointParticleHandler checkpointParticleHandler = new CheckpointParticleHandler();
-
-    private int lap;
-    private double time;
+    private final Player player;
     private LivingEntity pig;
-    private Player player;
+    private int lap;
+    private int checkpoint;
     private boolean inGame;
-    private int checkpoint = 0;
+    /** Checkpoints passed since the pig last touched the ground. Each one adds speed. */
+    private int speedLevel;
+    private double verticalSpeed;
+    /** A shove from another racer, fading over a few ticks. */
+    private Vector knockback = new Vector();
+    /** Where the pig was last tick, to catch gates it flew through between ticks. */
+    private Location lastPigLocation;
+    /** Set once the pig leaves the ground, so sitting at the start or a respawn isn't a crash. */
+    private boolean airborne;
+    private int groundTicks;
 
     public Racer(Player player) {
-        lap = 0;
-        time = 0;
-        pig = null;
         this.player = player;
-        this.inGame = false;
-    }
-
-    public int getLap() {
-        return lap;
-    }
-    public void addLap() {
-        this.lap++;
-    }
-
-    public double getTime() {
-        return time;
-    }
-    public void setTime(int time) {
-        this.time = time;
-    }
-
-    public LivingEntity getPig() {
-        return pig;
-    }
-    public void setPig(LivingEntity pig) {
-        this.pig = pig;
     }
 
     public Player getPlayer() {
         return player;
     }
 
-    public boolean inGame() {
-        return inGame;
+    public boolean is(Player other) {
+        return player.getUniqueId().equals(other.getUniqueId());
     }
-    public void setInGame(boolean inGame) {
-        this.inGame = inGame;
+
+    public LivingEntity getPig() {
+        return pig;
+    }
+
+    public void setPig(LivingEntity pig) {
+        this.pig = pig;
+    }
+
+    public int getLap() {
+        return lap;
+    }
+
+    public void addLap() {
+        lap++;
     }
 
     public int getCheckpoint() {
         return checkpoint;
     }
+
     public void setCheckpoint(int checkpoint) {
         this.checkpoint = checkpoint;
     }
-    public void nextCheckpoint(HashMap<CuboidSelection, Integer> selections) {
-        this.checkpoint++;
+
+    public void nextCheckpoint() {
+        checkpoint++;
+        speedLevel++;
+    }
+
+    public boolean inGame() {
+        return inGame;
+    }
+
+    public void setInGame(boolean inGame) {
+        this.inGame = inGame;
+    }
+
+    public int getSpeedLevel() {
+        return speedLevel;
+    }
+
+    public void resetSpeed() {
+        speedLevel = 0;
+        verticalSpeed = 0;
+        knockback = new Vector();
+        lastPigLocation = null;
+        airborne = false;
+        groundTicks = 0;
+    }
+
+    /** Counts ticks spent on the ground since the last respawn, and returns the new count. */
+    public int addGroundTick() {
+        return ++groundTicks;
+    }
+
+    public void addKnockback(Vector push) {
+        knockback.add(push);
+    }
+
+    /** This tick's share of any knockback, which then fades. */
+    public Vector takeKnockback(double fade) {
+        Vector now = knockback.clone();
+        knockback.multiply(fade);
+        if (knockback.lengthSquared() < 0.0001) {
+            knockback = new Vector();
+        }
+        return now;
+    }
+
+    public Location getLastPigLocation() {
+        return lastPigLocation;
+    }
+
+    public void setLastPigLocation(Location lastPigLocation) {
+        this.lastPigLocation = lastPigLocation;
+    }
+
+    public boolean isAirborne() {
+        return airborne;
+    }
+
+    public void setAirborne(boolean airborne) {
+        this.airborne = airborne;
+    }
+
+    public double getVerticalSpeed() {
+        return verticalSpeed;
+    }
+
+    public void setVerticalSpeed(double verticalSpeed) {
+        this.verticalSpeed = verticalSpeed;
     }
 }

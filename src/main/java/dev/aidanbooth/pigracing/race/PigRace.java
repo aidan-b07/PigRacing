@@ -1,349 +1,512 @@
 package dev.aidanbooth.pigracing.race;
 
-import com.github.fierioziy.particlenativeapi.api.ParticleNativeAPI;
-import com.github.fierioziy.particlenativeapi.api.Particles_1_8;
-import com.github.fierioziy.particlenativeapi.core.ParticleNativeCore;
-import com.sk89q.worldedit.bukkit.selections.CuboidSelection;
+import com.cryptomorin.xseries.messages.ActionBar;
+import com.cryptomorin.xseries.messages.Titles;
 import dev.aidanbooth.pigracing.Main;
-import dev.aidanbooth.pigracing.listeners.checkpoint.CheckPointPassEventListener;
-import dev.aidanbooth.pigracing.race.customentity.CustomPig;
-import dev.aidanbooth.pigracing.utils.*;
-import io.github.theluca98.textapi.Title;
-import dev.aidanbooth.pigracing.utils.Actionbar;
-import dev.aidanbooth.pigracing.utils.ArrayIndexFromValue;
+import dev.aidanbooth.pigracing.compat.DustParticles;
+import dev.aidanbooth.pigracing.compat.Entities;
+import dev.aidanbooth.pigracing.compat.Potions;
+import dev.aidanbooth.pigracing.compat.Sounds;
+import dev.aidanbooth.pigracing.listeners.checkpoint.CheckpointPassEvent;
 import dev.aidanbooth.pigracing.utils.LocationSerialiser;
-import dev.aidanbooth.pigracing.utils.RacerUtils;
+import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
-import org.bukkit.*;
-import org.bukkit.entity.*;
-import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
+import org.bukkit.Location;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Pig;
+import org.bukkit.entity.Player;
+import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.UUID;
 
 public class PigRace {
-    private Main plugin = Main.getPlugin(Main.class);
-    private CheckPointPassEventListener checkPointPassEventListener = new CheckPointPassEventListener();
+    public static final String PIG_TAG = "pigrace";
 
-    private ParticleNativeAPI api = ParticleNativeCore.loadAPI(plugin);
-    private Particles_1_8 particles = api.getParticles_1_8();
+    private final Main plugin;
+    private final FileConfiguration config;
+    private final Checkpoints checkpoints;
 
-    private List<Racer> racers;
-    private List<LivingEntity> pigs;
-    private List<Racer> completedRacers = new ArrayList<>();
-    private int timeRemaining;
-    private Location waitLocation;
-    private Location startLocation;
+    private final List<Racer> racers = new ArrayList<>();
+    private final List<Racer> completedRacers = new ArrayList<>();
+    private final List<BukkitTask> tasks = new ArrayList<>();
+    /** Players this plugin is moving off their pig on purpose, so the dismount blocker lets it through. */
+    private final Set<UUID> allowedDismounts = new HashSet<>();
+
+    private final Location waitLocation;
+    private final Location startLocation;
+    private final int laps;
     private RaceState raceState = RaceState.WAITING;
-    private int maxCheckpoints = CheckPointPassEventListener.checkpointRegions.size();
 
-    private List<String> joinMessage = new ArrayList<>();
-    private List<String> joinedMessage = new ArrayList<>();
-    private String inventoryNotEmptyMessage;
-    private String leaveMessage;
-    private String joinedBroadcast;
-    private String alreadyInRace;
-    private String notInRace;
-    private String waitingActionbar;
-    private String inProgressActionbar;
-    private String completedActionbar;
-    private String goneTooFar;
-
-
-    public PigRace() {
-        racers = new ArrayList<>();
-        timeRemaining = 300;
-        pigs = new ArrayList<>();
-
-        for(String s : plugin.getConfig().getStringList("Messages.JoinRace")) {
-            joinMessage.add(ChatColor.translateAlternateColorCodes('&', s));
+    /** Checks a race can run here. Returns a reason it can't, or null if it can. */
+    public static String validate(Main plugin) {
+        FileConfiguration config = plugin.getConfig();
+        if (LocationSerialiser.parse(config.getString("Data.WaitingLocation")) == null) {
+            return "The waiting location isn't set, or its world isn't loaded. Use /race setwaitingloc.";
         }
-        for(String s : plugin.getConfig().getStringList("Messages.Joined")) {
-            joinedMessage.add(ChatColor.translateAlternateColorCodes('&', s));
+        if (LocationSerialiser.parse(config.getString("Data.StartLocation")) == null) {
+            return "The start location isn't set, or its world isn't loaded. Use /race setstartloc.";
         }
-        inventoryNotEmptyMessage = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.InventoryNotEmpty"));
-        leaveMessage = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.Leave"));
-        joinedBroadcast = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.JoinedBroadcast"));
-        alreadyInRace = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.AlreadyInRace"));
-        notInRace = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.NotInRace"));
-        waitingActionbar = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Actionbar.Waiting"));
-        inProgressActionbar = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Actionbar.InProgress"));
-        completedActionbar = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Actionbar.RaceCompleted"));
-        goneTooFar = ChatColor.translateAlternateColorCodes('&', plugin.getConfig().getString("Messages.GoneTooFar"));
+        if (plugin.getCheckpoints().size() == 0) {
+            return "The track has no checkpoints. Use /race pos1, /race pos2 and /race addcheckpoint.";
+        }
+        return null;
+    }
 
-        waitLocation = LocationSerialiser.getLiteLocationFromString(plugin.getConfig().getString("Data.WaitingLocation"));
-        startLocation = LocationSerialiser.getLiteLocationFromString(plugin.getConfig().getString("Data.StartLocation"));
+    public PigRace(Main plugin) {
+        this.plugin = plugin;
+        this.config = plugin.getConfig();
+        this.checkpoints = plugin.getCheckpoints();
+        this.waitLocation = LocationSerialiser.parse(config.getString("Data.WaitingLocation"));
+        this.startLocation = LocationSerialiser.parse(config.getString("Data.StartLocation"));
+        this.laps = Math.max(1, config.getInt("Settings.Laps", 3));
 
         plugin.race = this;
         startGathering();
-        startActionbars();
-        startLocationListener();
+        repeat(this::updateActionbars, 20, 20);
     }
 
     public RaceState getGameState() {
         return raceState;
     }
+
     public List<Racer> getRacers() {
         return racers;
     }
-    public int getMaxChekpoints() {
-        return maxCheckpoints;
+
+    public int getLaps() {
+        return laps;
     }
 
+    public Racer getRacer(Player player) {
+        for (Racer r : racers) {
+            if (r.is(player)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    public boolean isRacer(Player player) {
+        return getRacer(player) != null;
+    }
+
+    public boolean isDismountAllowed(Player player) {
+        Racer racer = getRacer(player);
+        return racer == null || !racer.inGame() || allowedDismounts.contains(player.getUniqueId());
+    }
+
+    // ------------------------------------------------------------------ lifecycle
+
     private void startGathering() {
-        new BukkitRunnable() {
-            int counter = 10; //TODO CHANGE 60 / ADD CONFIG
+        int joinTime = Math.max(1, config.getInt("Settings.JoinTime", 60));
+        List<Integer> announceAt = config.getIntegerList("Settings.AnnounceAt");
+        tasks.add(new BukkitRunnable() {
+            int counter = joinTime;
+
             @Override
             public void run() {
-                if(counter == 0) {
-                    startRace();
+                if (counter <= 0) {
                     cancel();
+                    startRace();
+                    return;
                 }
-                if(counter == 60 || counter == 30 || counter == 10 || counter == 5 || counter == 4 || counter == 3 || counter == 2 || counter == 1) {
-                    for (String s : joinMessage) {
-                        TextComponent component = new TextComponent(TextComponent.fromLegacyText(ChatColor.translateAlternateColorCodes('&', s.replace("{time}", String.valueOf(counter)))));
-                        component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/pigrace join"));
-                        component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText(ChatColor.LIGHT_PURPLE + "/pigrace join")));
-                        for (Player player : Bukkit.getOnlinePlayers()) {
-                            player.spigot().sendMessage(component);
-                        }
-                    }
+                if (counter == joinTime || announceAt.contains(counter)) {
+                    announceJoin(counter);
                 }
                 counter--;
             }
-        }.runTaskTimer(plugin, 20, 20);
+        }.runTaskTimer(plugin, 0, 20));
     }
+
+    private void announceJoin(int seconds) {
+        String hover = plugin.message("Messages.JoinHover");
+        for (String line : plugin.messages("Messages.JoinRace")) {
+            BaseComponent[] text = TextComponent.fromLegacyText(line.replace("{time}", String.valueOf(seconds)));
+            TextComponent component = new TextComponent(text);
+            component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/race join"));
+            component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText(hover)));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.spigot().sendMessage(component);
+            }
+        }
+    }
+
     private void startRace() {
-        for(Racer r : racers) {
+        int minPlayers = Math.max(1, config.getInt("Settings.MinPlayers", 1));
+        if (racers.size() < minPlayers) {
+            Bukkit.broadcastMessage(plugin.message("Messages.NotEnoughPlayers").replace("{min}", String.valueOf(minPlayers)));
+            stop();
+            return;
+        }
+        raceState = RaceState.STARTING;
+
+        int countdownTicks = 20 * (countdownLength() + 1);
+        for (Racer r : racers) {
             Player player = r.getPlayer();
             player.teleport(startLocation);
 
-            Pig pig = CustomPig.spawn(player.getLocation());
-            pig.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 120, 100));
+            Pig pig = startLocation.getWorld().spawn(startLocation, Pig.class);
             pig.setSaddle(true);
-            pig.setMetadata("pigrace", new FixedMetadataValue(plugin, true));
-            //pig.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 999999, 1, false));
-
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 120, 100));
+            pig.setRemoveWhenFarAway(false);
+            pig.setMetadata(PIG_TAG, new FixedMetadataValue(plugin, true));
+            Entities.notPersistent(pig);
+            // Keeps the pig still until GO
+            Potions.freeze(pig, countdownTicks);
+            Entities.mount(pig, player);
 
             r.setPig(pig);
-            pigs.add(pig);
-
             r.setInGame(true);
-            raceState = RaceState.INPROGRESS;
-
-            startParticles();
         }
 
-        new BukkitRunnable() {
-            int counter = 5;
-            @Override
-            public void run() {
-                if(counter == 5 || counter == 4) {
-                    for(Racer r : racers) {
-                        Player player = r.getPlayer();
-                        player.playSound(player.getLocation(), Sound.NOTE_BASS_GUITAR, 20, 1);
-                        Title title = new Title(ChatColor.GREEN + String.valueOf(counter), "", 5, 10, 5);
-                        title.send(player);
-                    }
-                }
-                if(counter == 3 || counter == 2) {
-                    for(Racer r : racers) {
-                        Player player = r.getPlayer();
-                        player.playSound(player.getLocation(), Sound.NOTE_BASS_GUITAR, 20, 1);
-                        Title title = new Title(ChatColor.GOLD + String.valueOf(counter), "", 5, 10, 5);
-                        title.send(player);
-                    }
-                }
-                if(counter == 1) {
-                    for(Racer r : racers) {
-                        Player player = r.getPlayer();
-                        player.playSound(player.getLocation(), Sound.NOTE_BASS_GUITAR, 20, 1);
-                        Title title = new Title(ChatColor.RED + "1", "", 5, 10, 5);
-                        title.send(player);
-                    }
-                }
-                if(counter == 0) {
-                    Title title = new Title(ChatColor.RED + "GOOOOOOOOOOO", "", 5, 10, 5);
-                    for(Racer r : racers) {
-                        title.send(r.getPlayer());
-                        r.getPig().setPassenger(r.getPlayer());
-                    }
-                    cancel();
-                }
-                counter--;
-            }
-        }.runTaskTimer(plugin, 20, 20);
+        startCountdown();
     }
-    private void startParticles() {
-        HashMap<CuboidSelection, Integer> checkpointRegions = CheckPointPassEventListener.checkpointRegions;
-        new BukkitRunnable() {
-            float radius = 3f;
-            float angle = 0f;
+
+    private TreeMap<Integer, String> countdownTitles() {
+        TreeMap<Integer, String> titles = new TreeMap<>();
+        ConfigurationSection section = config.getConfigurationSection("Titles.Countdown");
+        if (section != null) {
+            for (String key : section.getKeys(false)) {
+                try {
+                    titles.put(Integer.parseInt(key), Main.color(section.getString(key)));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return titles;
+    }
+
+    private int countdownLength() {
+        TreeMap<Integer, String> titles = countdownTitles();
+        return titles.isEmpty() ? 0 : titles.lastKey();
+    }
+
+    private void startCountdown() {
+        TreeMap<Integer, String> titles = countdownTitles();
+        tasks.add(new BukkitRunnable() {
+            int counter = titles.isEmpty() ? 0 : titles.lastKey();
+
             @Override
             public void run() {
-                for (CuboidSelection selection : checkpointRegions.keySet()) {
-                    for (Player p : Bukkit.getOnlinePlayers()) {
-                        if (p.getWorld() == selection.getWorld()) {
-                            if (p.getLocation().distance(selection.getMinimumPoint()) <= 40) {
-                                Location minPoint = selection.getMinimumPoint();
-                                Location maxPoint = selection.getMaximumPoint();
-
-                                Location location = new Location(selection.getWorld(),
-                                        (maxPoint.getX() + minPoint.getX()) / 2,
-                                        (maxPoint.getY() + minPoint.getY()) / 2,
-                                        (maxPoint.getZ() + minPoint.getZ()) / 2);
-
-                                double xz = (radius * Math.sin(angle));
-                                double y = (radius * Math.cos(angle));
-                                double xz90 = (radius * Math.sin(angle + 90));
-                                double y90 = (radius * Math.cos(angle + 90));
-                                double xz180 = (radius * Math.sin(angle + 180));
-                                double y180 = (radius * Math.cos(angle + 180));
-                                double xz270 = (radius * Math.sin(angle + 270));
-                                double y270 = (radius * Math.cos(angle + 270));
-                                angle += 0.03;
-
-                                Location oppLocation = location.clone();
-                                Location location90 = location.clone();
-                                Location oppLocation90 = location.clone();
-                                Location location180 = location.clone();
-                                Location oppLocation180 = location.clone();
-                                Location location270 = location.clone();
-                                Location oppLocation270 = location.clone();
-
-                                if(getDirection(selection) == 'x') {
-                                    location.add(xz, y, 0);
-                                    location90.add(xz90, y90, 0);
-                                    location180.add(xz180, y180, 0);
-                                    location270.add(xz270, y270, 0);
-                                    oppLocation.subtract(xz, y, 0);
-                                    oppLocation90.subtract(xz90, y90, 0);
-                                    oppLocation180.subtract(xz180, y180, 0);
-                                    oppLocation270.subtract(xz270, y, 0);
-                                } else {
-                                    location.add(0, y, xz);
-                                    location90.add(0, y90, xz90);
-                                    location180.add(0, y180, xz180);
-                                    location270.add(0, y270, xz270);
-                                    oppLocation.subtract(0, y, xz);
-                                    oppLocation90.subtract(0, y90, xz90);
-                                    oppLocation180.subtract(0, y180, xz180);
-                                    oppLocation270.subtract(0, y270, xz270);
-                                }
-
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, location, Color.FUCHSIA));
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, oppLocation, Color.WHITE));
-
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, location90, Color.FUCHSIA));
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, oppLocation90, Color.WHITE));
-                                
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, location180, Color.FUCHSIA));
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, oppLocation180, Color.WHITE));
-
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, location270, Color.FUCHSIA));
-                                particles.sendPacket(p, particles.REDSTONE().packetColored(true, oppLocation270, Color.WHITE));
-                            }
+                if (counter > 0) {
+                    String title = titles.get(counter);
+                    for (Racer r : racers) {
+                        if (title != null) {
+                            Titles.sendTitle(r.getPlayer(), 5, 10, 5, title, "");
                         }
+                        Sounds.play(r.getPlayer(), config, "Sounds.Countdown");
+                    }
+                    counter--;
+                    return;
+                }
+                cancel();
+                String go = plugin.message("Titles.Go");
+                for (Racer r : racers) {
+                    Titles.sendTitle(r.getPlayer(), 5, 10, 5, go, "");
+                    Sounds.play(r.getPlayer(), config, "Sounds.Go");
+                    if (r.getPig() != null) {
+                        Potions.unfreeze(r.getPig());
                     }
                 }
+                raceState = RaceState.INPROGRESS;
+                repeat(PigRace.this::flyPigs, 1, 1);
+                repeat(PigRace.this::showCheckpointParticles, 1, 2);
+                repeat(PigRace.this::checkTooFar, 10, 10);
             }
-        }.runTaskTimer(plugin, 1, 1);
+        }.runTaskTimer(plugin, 20, 20));
     }
-    private char getDirection(CuboidSelection selection) {
-        if(selection.getWidth() > selection.getLength()) {
-            return 'x';
-        } else {
-            return 'z';
+
+    /** Ends the race: cancels its tasks, removes pigs and sends racers back to the waiting area. */
+    public void stop() {
+        raceState = RaceState.ENDED;
+        for (BukkitTask task : tasks) {
+            task.cancel();
+        }
+        tasks.clear();
+        for (Racer r : new ArrayList<>(racers)) {
+            releaseRacer(r, true);
+        }
+        racers.clear();
+        if (plugin.race == this) {
+            plugin.race = null;
         }
     }
-    private void startActionbars() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for(Racer r : racers) {
-                    if(raceState == RaceState.WAITING) {
-                        Actionbar.sendActionText(r.getPlayer(), waitingActionbar.replace("{players}", String.valueOf(racers.size())));
-                    }
-                    if(raceState == RaceState.INPROGRESS) {
-                        if(r.getLap() == 3) {
-                            Actionbar.sendActionText(r.getPlayer(), completedActionbar.replace("{position}", String.valueOf(ArrayIndexFromValue.getIndex(completedRacers, r))));
-                        } else {
-                            Actionbar.sendActionText(r.getPlayer(), inProgressActionbar.replace("{laps}", String.valueOf(r.getLap())));
-                        }
-                    }
+
+    private void endWhenEveryoneFinished() {
+        for (Racer r : racers) {
+            if (r.inGame()) {
+                return;
+            }
+        }
+        raceState = RaceState.ENDED;
+        Bukkit.broadcastMessage(plugin.message("Messages.RaceOver"));
+        Bukkit.getScheduler().runTaskLater(plugin, this::stop, 20L * Math.max(0, config.getInt("Settings.EndDelay", 5)));
+    }
+
+    // ------------------------------------------------------------------ ticking
+
+    private void repeat(Runnable action, long delay, long period) {
+        tasks.add(Bukkit.getScheduler().runTaskTimer(plugin, action, delay, period));
+    }
+
+    private void flyPigs() {
+        // Copy: finishing a lap can take a racer out of the list
+        for (Racer r : new ArrayList<>(racers)) {
+            if (!r.inGame() || r.getPig() == null || !r.getPig().isValid()) {
+                continue;
+            }
+            checkProgress(r);
+            if (r.inGame()) {
+                plugin.getFlight().tick(r);
+            }
+        }
+    }
+
+    /** Checkpoints and crashes, from where the pig moved since last tick. */
+    private void checkProgress(Racer r) {
+        Location now = r.getPig().getLocation();
+        Location before = r.getLastPigLocation();
+        r.setLastPigLocation(now);
+
+        Region next = checkpoints.get(r.getCheckpoint() + 1);
+        if (next != null && next.crossedBy(before, now)) {
+            passedCheckpoint(r);
+            return;
+        }
+
+        // Sitting at the start or a respawn point is fine for a moment; after that, or once the pig
+        // has flown, touching anything but safe ground is a crash
+        if (!r.getPig().isOnGround()) {
+            r.setAirborne(true);
+            return;
+        }
+        int grace = config.getInt("Settings.GroundGraceTicks", 60);
+        if ((r.isAirborne() || r.addGroundTick() > grace) && !isSafeGround(now)) {
+            crashed(r);
+        }
+    }
+
+    /** Blocks a pig may land on without crashing (carpet by default), matched by name with * wildcards. */
+    private boolean isSafeGround(Location at) {
+        List<String> safe = config.getStringList("Settings.SafeGroundBlocks");
+        String feet = at.getBlock().getType().name();
+        String below = at.clone().subtract(0, 0.1, 0).getBlock().getType().name();
+        for (String pattern : safe) {
+            String regex = pattern.toUpperCase(java.util.Locale.ROOT).replace("*", ".*");
+            if (feet.matches(regex) || below.matches(regex)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private double particleAngle;
+
+    private void showCheckpointParticles() {
+        if (!config.getBoolean("Particles.Enabled", true)) {
+            return;
+        }
+        double radius = config.getDouble("Particles.Radius", 3);
+        double range = config.getDouble("Particles.ViewDistance", 40);
+        Color front = parseColor(config.getString("Particles.Color"), Color.FUCHSIA);
+        Color back = parseColor(config.getString("Particles.SecondColor"), Color.WHITE);
+        particleAngle += config.getDouble("Particles.Speed", 0.06);
+
+        for (Region gate : checkpoints.all()) {
+            Location center = gate.center();
+            if (center == null) {
+                continue;
+            }
+            boolean alongX = gate.facesAlongX();
+            for (Player p : center.getWorld().getPlayers()) {
+                if (p.getLocation().distanceSquared(center) > range * range) {
+                    continue;
+                }
+                // Four pairs of opposite points spinning around the gate's centre
+                for (int i = 0; i < 4; i++) {
+                    double angle = particleAngle + i * Math.PI / 2;
+                    double across = radius * Math.sin(angle);
+                    double up = radius * Math.cos(angle);
+                    Location a = center.clone().add(alongX ? across : 0, up, alongX ? 0 : across);
+                    Location b = center.clone().subtract(alongX ? across : 0, up, alongX ? 0 : across);
+                    DustParticles.show(p, a, front);
+                    DustParticles.show(p, b, back);
                 }
             }
-        }.runTaskTimer(plugin, 20, 20);
+        }
     }
-    private void startLocationListener() {
-        new BukkitRunnable() {
 
-            @Override
-            public void run() {
-                for(Racer r : racers) {
-                    Player player = r.getPlayer();
-                    if(player.getLocation().distance(startLocation) >= 150) {
-                        if (player.getVehicle() != null) {
-                            Entity pig = player.getVehicle();
-                            pig.eject();
-                            pig.teleport(startLocation);
-                            player.teleport(startLocation);
-                            pig.setPassenger(player);
-                            player.sendMessage(goneTooFar);
-                        }
-                    }
-                }
-            }
-        }.runTaskTimer(plugin, 10, 10);
+    private static Color parseColor(String hex, Color fallback) {
+        if (hex == null) {
+            return fallback;
+        }
+        try {
+            return Color.fromRGB(Integer.parseInt(hex.replace("#", ""), 16));
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
     }
-    private void startPowerupSpawns() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
 
+    private void updateActionbars() {
+        String waiting = plugin.message("Actionbar.Waiting");
+        String inProgress = plugin.message("Actionbar.InProgress");
+        String completed = plugin.message("Actionbar.RaceCompleted");
+        for (Racer r : racers) {
+            String text;
+            if (raceState == RaceState.WAITING) {
+                text = waiting.replace("{players}", String.valueOf(racers.size()));
+            } else if (!r.inGame() && completedRacers.contains(r)) {
+                text = completed.replace("{position}", String.valueOf(getRacerPosition(r)));
+            } else {
+                text = inProgress.replace("{laps}", String.valueOf(r.getLap())).replace("{total}", String.valueOf(laps));
             }
-        }.runTaskTimer(plugin, 2000, 2000);
+            ActionBar.sendActionBar(r.getPlayer(), text);
+        }
+    }
 
+    private void checkTooFar() {
+        double max = config.getDouble("Settings.MaxDistanceFromStart", 150);
+        for (Racer r : racers) {
+            Player player = r.getPlayer();
+            if (!r.inGame() || r.getPig() == null) {
+                continue;
+            }
+            boolean otherWorld = player.getWorld() != startLocation.getWorld();
+            if (otherWorld || player.getLocation().distanceSquared(startLocation) >= max * max) {
+                sendBack(r, startLocation);
+                player.sendMessage(plugin.message("Messages.GoneTooFar"));
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ racing
+
+    /** The pig touched the ground: back to the last checkpoint passed, and lose all speed. */
+    public void crashed(Racer racer) {
+        Region last = checkpoints.get(racer.getCheckpoint());
+        Location to = last == null ? startLocation : last.center();
+        if (to == null) {
+            to = startLocation;
+        }
+        to = to.clone();
+        to.setYaw(racer.getPlayer().getLocation().getYaw());
+        if (last != null) {
+            to.add(0, config.getDouble("Settings.RespawnHeight", 2), 0);
+        }
+        sendBack(racer, to);
+        Sounds.play(racer.getPlayer(), config, "Sounds.Crash");
+    }
+
+    private void sendBack(Racer racer, Location to) {
+        Player player = racer.getPlayer();
+        allowedDismounts.add(player.getUniqueId());
+        try {
+            Entities.teleportMounted(racer.getPig(), player, to);
+        } finally {
+            allowedDismounts.remove(player.getUniqueId());
+        }
+        racer.resetSpeed();
+    }
+
+    /** A racer flew through their next checkpoint. */
+    public void passedCheckpoint(Racer racer) {
+        racer.nextCheckpoint();
+        Sounds.play(racer.getPlayer(), config, "Sounds.Checkpoint");
+        Bukkit.getPluginManager().callEvent(new CheckpointPassEvent(racer, this));
+
+        if (racer.getCheckpoint() < checkpoints.size()) {
+            return;
+        }
+        racer.setCheckpoint(0);
+        racer.addLap();
+        racer.getPlayer().sendMessage(plugin.message("Messages.LapComplete")
+                .replace("{lap}", String.valueOf(racer.getLap())).replace("{total}", String.valueOf(laps)));
+        if (racer.getLap() < laps) {
+            return;
+        }
+
+        completedRacers.add(racer);
+        releaseRacer(racer, true);
+        Bukkit.broadcastMessage(plugin.message("Messages.CompleteBroadcast")
+                .replace("{player}", racer.getPlayer().getName())
+                .replace("{position}", String.valueOf(getRacerPosition(racer))));
+        endWhenEveryoneFinished();
+    }
+
+    /** Takes a racer out of play: removes their pig and, if asked, sends them to the waiting area. */
+    private void releaseRacer(Racer racer, boolean teleport) {
+        Player player = racer.getPlayer();
+        racer.setInGame(false);
+        allowedDismounts.add(player.getUniqueId());
+        try {
+            Entity pig = racer.getPig();
+            if (pig != null) {
+                pig.eject();
+                pig.remove();
+                racer.setPig(null);
+            }
+        } finally {
+            allowedDismounts.remove(player.getUniqueId());
+        }
+        plugin.getFlight().getInput().forget(player);
+        if (teleport && player.isOnline() && waitLocation != null && raceState != RaceState.WAITING) {
+            player.teleport(waitLocation);
+        }
     }
 
     public void addPlayer(Player player) {
-        if (RacerUtils.playerInRace(player, racers)) {
-            player.sendMessage(alreadyInRace);
+        if (isRacer(player)) {
+            player.sendMessage(plugin.message("Messages.AlreadyInRace"));
+            return;
+        }
+        if (raceState != RaceState.WAITING) {
+            player.sendMessage(plugin.message("Messages.AlreadyStarted"));
             return;
         }
         racers.add(new Racer(player));
         player.teleport(waitLocation);
-        for (String s : joinedMessage) {
+        for (String s : plugin.messages("Messages.Joined")) {
             player.sendMessage(s);
         }
-        Bukkit.broadcastMessage(joinedBroadcast.replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
+        Bukkit.broadcastMessage(plugin.message("Messages.JoinedBroadcast")
+                .replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
     }
+
     public void removePlayer(Player player, boolean messages) {
-        if(!RacerUtils.playerInRace(player, racers)) {
-            if(messages) player.sendMessage(notInRace);
-            return;
-        }
-        for(Racer r : racers) {
-            if(r.getPlayer() == player) {
-                racers.remove(r);
-                if(messages) player.sendMessage(leaveMessage);
+        Iterator<Racer> it = racers.iterator();
+        while (it.hasNext()) {
+            Racer r = it.next();
+            if (r.is(player)) {
+                releaseRacer(r, player.isOnline());
+                it.remove();
+                if (messages) {
+                    player.sendMessage(plugin.message("Messages.Leave"));
+                }
+                if (raceState == RaceState.INPROGRESS) {
+                    endWhenEveryoneFinished();
+                }
                 return;
             }
         }
+        if (messages) {
+            player.sendMessage(plugin.message("Messages.NotInRace"));
+        }
     }
 
-    public void setRacerCompleted(Racer r) {
-        completedRacers.add(r);
-    }
     public int getRacerPosition(Racer r) {
-        return ArrayIndexFromValue.getIndex(completedRacers, r);
+        return completedRacers.indexOf(r) + 1;
     }
 }

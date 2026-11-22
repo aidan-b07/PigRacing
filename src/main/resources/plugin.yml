@@ -1,19 +1,24 @@
 name: PigRacing
 version: '${project.version}'
 main: dev.aidanbooth.pigracing.Main
-load: POSTWORLD
+# Lets 1.13+ load the plugin without legacy mode. Older servers ignore this.
+api-version: '1.13'
 softdepend:
-  - FastAsyncWorldEdit
-  - WorldEdit
-  - MultiverseCore
+  - Multiverse-Core
 commands:
   race:
-    description: Main command
-    usage: /<command>
+    description: Pig racing
+    usage: /<command> help
     aliases:
       - pr
       - pigracing
       - pigrace
 permissions:
-  pigrace.start:
-    description: Allows a player to start a pigrace
+  pigracing.start:
+    description: Start a pig race
+    default: op
+  pigracing.admin:
+    description: Set up tracks and manage races
+    default: op
+    children:
+      pigracing.start: true
