@@ -8,8 +8,9 @@ Settings:
   JoinTime: 60
   # Seconds left when the join message is repeated in chat
   AnnounceAt: [30, 10, 5, 4, 3, 2, 1]
-  # Fewer racers than this when joining closes cancels the race
-  MinPlayers: 1
+  # Fewer racers than this when joining closes cancels the race. /race forcestart ignores it.
+  # A race nobody joined is always called off.
+  MinPlayers: 2
   # Seconds between the last racer finishing and everyone being sent back
   EndDelay: 5
   # Racers this far from the start (or in another world) are sent back to it
@@ -23,12 +24,33 @@ Settings:
   # Pigs can land on these without crashing. * matches anything, e.g. "*_CARPET"
   SafeGroundBlocks:
     - "*CARPET"
-  # Commands racers may still use. Everything else is blocked during a race.
-  AllowedCommands:
-    - race
-    - pr
-    - pigrace
-    - pigracing
+
+# Which commands players in a race may use. /race always works, so anyone can leave.
+# Mode "whitelist": only the listed commands work. Mode "blacklist": everything but them works.
+# Names without the slash; "plugin:command" forms are matched by the part after the colon.
+Commands:
+  # Signed up and waiting for the start, or finished and waiting for the others
+  Waiting:
+    Mode: blacklist
+    List:
+      - spawn
+      - home
+      - warp
+      - tp
+      - tpa
+      - tpaccept
+      - back
+      - fly
+  # On a pig, racing
+  Racing:
+    Mode: whitelist
+    List:
+      - msg
+      - tell
+      - w
+      - r
+      - reply
+      - me
 
 Flight:
   # Forward speed with no checkpoints passed
@@ -109,7 +131,9 @@ Messages:
   AlreadyInRace: "&cYou are already in the race!"
   AlreadyStarted: "&cThis race has already started!"
   NotInRace: "&cYou are not in the race!"
-  NotEnoughPlayers: "&cThe pig race was cancelled: it needs at least {min} racers."
+  NotEnoughPlayers: "&cNot enough racers joined: the race needs at least {min}."
+  RaceCancelled: "&cThe pig race was cancelled: it needs at least {min} racers."
+  RaceVoided: "&cThe pig race was called off: nobody is racing."
   LapComplete: "&a&l&k000&r &dLap Complete! {lap}/{total} &a&l&k000"
   CompleteBroadcast: "&f&l&k000&r &d{player} has completed the race! &6#{position} &f&k&l000"
   RaceOver: "&dThe pig race is over! Thanks for racing."
@@ -125,6 +149,7 @@ Messages:
       - "&6/{label} leave &d- Leave the race"
     Admin:
       - "&6/{label} start &d- Start a race"
+      - "&6/{label} forcestart &d- Skip the join timer and start now"
       - "&6/{label} stop &d- Stop the current race"
       - "&6/{label} reload &d- Reload the config"
       - "&6/{label} setwaitingloc &d- Set where racers wait, here"
@@ -143,6 +168,10 @@ Messages:
     RaceAlreadyRunning: "&cA race is already running. Stop it first with /race stop."
     CannotStart: "&cCan't start a race: {reason}"
     RaceStopped: "&aRace stopped."
+    NothingToForceStart: "&cNo race is taking sign-ups. Open one with /race start first."
+    AlreadyUnderway: "&cThe race has already started."
+    ForceStarted: "&aStarting now with {players} racers."
+    ForceStartedEmpty: "&cNobody had joined, so the race was called off."
 
 Actionbar:
   Waiting: "&cRace starting soon. &8Players: {players}"

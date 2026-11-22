@@ -3,6 +3,7 @@ package dev.aidanbooth.pigracing.listeners;
 import dev.aidanbooth.pigracing.Main;
 import dev.aidanbooth.pigracing.race.PigRace;
 import dev.aidanbooth.pigracing.race.Racer;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
@@ -89,6 +90,10 @@ public class RaceListener implements Listener {
         }
         for (Racer target : plugin.race.getRacers()) {
             if (target.getPig() != null && target.getPig().getUniqueId().equals(e.getEntity().getUniqueId())) {
+                if (target == attackerRacer) {
+                    // Your own pig: riders click it all the time by accident
+                    return;
+                }
                 double strength = plugin.getConfig().getDouble("Flight.KnockbackStrength", 1.0);
                 target.addKnockback(attacker.getLocation().getDirection().setY(0).normalize().multiply(strength));
                 return;
@@ -105,7 +110,8 @@ public class RaceListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onCommand(PlayerCommandPreprocessEvent e) {
-        if (activeRacer(e.getPlayer()) == null) {
+        Racer racer = activeRacer(e.getPlayer());
+        if (racer == null) {
             return;
         }
         String label = e.getMessage().substring(1).split(" ", 2)[0].toLowerCase(Locale.ROOT);
@@ -113,14 +119,30 @@ public class RaceListener implements Listener {
         if (namespace >= 0) {
             label = label.substring(namespace + 1);
         }
-        List<String> allowed = plugin.getConfig().getStringList("Settings.AllowedCommands");
-        for (String command : allowed) {
-            if (command.equalsIgnoreCase(label)) {
-                return;
-            }
+        // The plugin's own command always works, so racers can always leave
+        PluginCommand own = plugin.getCommand("race");
+        if (own != null && (own.getName().equalsIgnoreCase(label) || containsIgnoreCase(own.getAliases(), label))) {
+            return;
+        }
+        // Racers on a pig follow the racing rules; everyone else in the race (waiting, or finished)
+        // follows the waiting area's
+        String path = racer.inGame() ? "Commands.Racing" : "Commands.Waiting";
+        boolean whitelist = !"blacklist".equalsIgnoreCase(plugin.getConfig().getString(path + ".Mode", "whitelist"));
+        boolean listed = containsIgnoreCase(plugin.getConfig().getStringList(path + ".List"), label);
+        if (listed == whitelist) {
+            return;
         }
         e.setCancelled(true);
         e.getPlayer().sendMessage(plugin.message("Messages.CommandBlocked"));
+    }
+
+    private static boolean containsIgnoreCase(List<String> list, String value) {
+        for (String s : list) {
+            if (s.equalsIgnoreCase(value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

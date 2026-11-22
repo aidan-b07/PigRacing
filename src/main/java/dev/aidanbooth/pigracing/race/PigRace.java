@@ -50,6 +50,9 @@ public class PigRace {
     private final Location startLocation;
     private final int laps;
     private RaceState raceState = RaceState.WAITING;
+    private BukkitTask gathering;
+    /** Seconds until joining closes, while waiting. */
+    private int secondsLeft;
 
     /** Checks a race can run here. Returns a reason it can't, or null if it can. */
     public static String validate(Main plugin) {
@@ -114,22 +117,41 @@ public class PigRace {
     private void startGathering() {
         int joinTime = Math.max(1, config.getInt("Settings.JoinTime", 60));
         List<Integer> announceAt = config.getIntegerList("Settings.AnnounceAt");
-        tasks.add(new BukkitRunnable() {
-            int counter = joinTime;
-
+        secondsLeft = joinTime;
+        gathering = new BukkitRunnable() {
             @Override
             public void run() {
-                if (counter <= 0) {
+                if (secondsLeft <= 0) {
                     cancel();
-                    startRace();
+                    startRace(false);
                     return;
                 }
-                if (counter == joinTime || announceAt.contains(counter)) {
-                    announceJoin(counter);
+                if (secondsLeft == joinTime || announceAt.contains(secondsLeft)) {
+                    announceJoin(secondsLeft);
                 }
-                counter--;
+                secondsLeft--;
             }
-        }.runTaskTimer(plugin, 0, 20));
+        }.runTaskTimer(plugin, 0, 20);
+        tasks.add(gathering);
+    }
+
+    public int getMinPlayers() {
+        return Math.max(1, config.getInt("Settings.MinPlayers", 2));
+    }
+
+    /**
+     * Closes joining now and starts with whoever has joined, ignoring the minimum. Returns false if
+     * the race is past joining already.
+     */
+    public boolean forceStart() {
+        if (raceState != RaceState.WAITING) {
+            return false;
+        }
+        if (gathering != null) {
+            gathering.cancel();
+        }
+        startRace(true);
+        return true;
     }
 
     private void announceJoin(int seconds) {
@@ -145,10 +167,18 @@ public class PigRace {
         }
     }
 
-    private void startRace() {
-        int minPlayers = Math.max(1, config.getInt("Settings.MinPlayers", 1));
-        if (racers.size() < minPlayers) {
-            Bukkit.broadcastMessage(plugin.message("Messages.NotEnoughPlayers").replace("{min}", String.valueOf(minPlayers)));
+    private void startRace(boolean forced) {
+        if (racers.isEmpty()) {
+            Bukkit.broadcastMessage(plugin.message("Messages.RaceVoided"));
+            stop();
+            return;
+        }
+        int minPlayers = getMinPlayers();
+        if (!forced && racers.size() < minPlayers) {
+            for (Racer r : racers) {
+                r.getPlayer().sendMessage(plugin.message("Messages.NotEnoughPlayers").replace("{min}", String.valueOf(minPlayers)));
+            }
+            Bukkit.broadcastMessage(plugin.message("Messages.RaceCancelled").replace("{min}", String.valueOf(minPlayers)));
             stop();
             return;
         }
@@ -246,10 +276,19 @@ public class PigRace {
     }
 
     private void endWhenEveryoneFinished() {
+        if (raceState == RaceState.ENDED) {
+            return;
+        }
         for (Racer r : racers) {
             if (r.inGame()) {
                 return;
             }
+        }
+        if (completedRacers.isEmpty()) {
+            // Everyone left before anyone finished: nothing to celebrate
+            Bukkit.broadcastMessage(plugin.message("Messages.RaceVoided"));
+            stop();
+            return;
         }
         raceState = RaceState.ENDED;
         Bukkit.broadcastMessage(plugin.message("Messages.RaceOver"));
@@ -495,7 +534,7 @@ public class PigRace {
                 if (messages) {
                     player.sendMessage(plugin.message("Messages.Leave"));
                 }
-                if (raceState == RaceState.INPROGRESS) {
+                if (raceState == RaceState.STARTING || raceState == RaceState.INPROGRESS) {
                     endWhenEveryoneFinished();
                 }
                 return;

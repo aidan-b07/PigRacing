@@ -24,7 +24,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     private static final String START = "pigracing.start";
 
     private static final List<String> PLAYER_COMMANDS = Arrays.asList("help", "join", "leave");
-    private static final List<String> ADMIN_COMMANDS = Arrays.asList("start", "stop", "reload",
+    private static final List<String> ADMIN_COMMANDS = Arrays.asList("start", "forcestart", "stop", "reload",
             "setwaitingloc", "setstartloc", "pos1", "pos2", "addcheckpoint", "resetcheckpoints");
 
     private final Main plugin;
@@ -48,6 +48,11 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             case "start":
                 if (allowed(sender, START)) {
                     start(sender);
+                }
+                return true;
+            case "forcestart":
+                if (allowed(sender, ADMIN)) {
+                    forceStart(sender);
                 }
                 return true;
             case "stop":
@@ -155,6 +160,20 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             return;
         }
         new PigRace(plugin);
+    }
+
+    private void forceStart(CommandSender sender) {
+        if (plugin.race == null) {
+            sender.sendMessage(plugin.message("Messages.Admin.NothingToForceStart"));
+            return;
+        }
+        int racers = plugin.race.getRacers().size();
+        if (!plugin.race.forceStart()) {
+            sender.sendMessage(plugin.message("Messages.Admin.AlreadyUnderway"));
+            return;
+        }
+        sender.sendMessage(plugin.message(racers == 0 ? "Messages.Admin.ForceStartedEmpty" : "Messages.Admin.ForceStarted")
+                .replace("{players}", String.valueOf(racers)));
     }
 
     private void stop(CommandSender sender) {
