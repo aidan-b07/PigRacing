@@ -16,15 +16,15 @@ import java.util.logging.Logger;
  * just behind it, and a lap is done when they fly back through it after every other ring.
  *
  * <pre>
- * Data:
- *   Checkpoints:
- *     '1':
- *       Location: world~41.5~89.5~343.5~180.0~0.0   # centre, then the way it faces (yaw, pitch)
- *       Size: 3                                     # fits a 3x3 opening
+ * track.yml:
+ * Rings:
+ *   '1':
+ *     Location: world~41.5~89.5~343.5~180.0~0.0   # centre, then the way it faces (yaw, pitch)
+ *     Size: 3                                     # fits a 3x3 opening
  * </pre>
  */
 public final class Checkpoints {
-    public static final String PATH = "Data.Checkpoints";
+    public static final String PATH = "Rings";
 
     private final List<Checkpoint> rings = new ArrayList<>();
 
@@ -47,7 +47,7 @@ public final class Checkpoints {
             Checkpoint ring = parse(section.getString(key + ".Location"), section.getDouble(key + ".Size", 3));
             if (ring == null) {
                 log.warning("Skipping checkpoint " + key + ": it needs a Location (world~x~y~z~yaw~pitch) and a Size."
-                        + " Old two-corner checkpoints have to be placed again with /race addcheckpoint.");
+                        + " Old two-corner checkpoints have to be placed again with /race ring add.");
                 continue;
             }
             ordered.put(number, ring);

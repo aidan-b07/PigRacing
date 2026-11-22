@@ -1,0 +1,24 @@
+# PigRacing rewards: prizes for racers who finish.
+#
+# Each entry is a list of commands run from the console, without the slash. Placeholders:
+#   {player}    the racer's name          {uuid}    their UUID
+#   {position}  1, 2, 3...                {place}   1st, 2nd, 3rd...
+#   {time}      their race time           {racers}  how many raced
+#
+# Commands run as each racer finishes, once they're back in the lobby. Racers who leave, or who
+# haven't finished when the race ends, get nothing. Reload with /race reload.
+
+# By finishing place. List as many places as you like; places not listed get nothing extra.
+# For example:
+#   Places:
+#     1:
+#       - "give {player} diamond 3"
+#       - "say {player} won the pig race in {time}!"
+#     2:
+#       - "give {player} gold_ingot 5"
+#     3:
+#       - "give {player} iron_ingot 5"
+Places: {}
+
+# Run for everyone who finishes, after their place's commands
+AllFinishers: []

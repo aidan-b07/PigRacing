@@ -60,15 +60,14 @@ public class PigRace {
 
     /** Checks a race can run here. Returns a reason it can't, or null if it can. */
     public static String validate(Main plugin) {
-        FileConfiguration config = plugin.getConfig();
-        if (LocationSerialiser.parse(config.getString("Data.WaitingLocation")) == null) {
-            return "The waiting location isn't set, or its world isn't loaded. Use /race setwaitingloc.";
+        if (LocationSerialiser.parse(plugin.track().getString("Lobby")) == null) {
+            return "The lobby isn't set, or its world isn't loaded. Use /race setlobby.";
         }
-        if (LocationSerialiser.parse(config.getString("Data.StartLocation")) == null) {
-            return "The start location isn't set, or its world isn't loaded. Use /race setstartloc.";
+        if (LocationSerialiser.parse(plugin.track().getString("Start")) == null) {
+            return "The start isn't set, or its world isn't loaded. Use /race setstart.";
         }
         if (plugin.getCheckpoints().size() == 0) {
-            return "The track has no checkpoints. Use /race addcheckpoint <size>.";
+            return "The track has no rings. Use /race ring add <size>.";
         }
         return null;
     }
@@ -77,10 +76,10 @@ public class PigRace {
         this.plugin = plugin;
         this.config = plugin.getConfig();
         this.checkpoints = plugin.getCheckpoints();
-        this.waitLocation = LocationSerialiser.parse(config.getString("Data.WaitingLocation"));
-        this.startLocation = LocationSerialiser.parse(config.getString("Data.StartLocation"));
+        this.waitLocation = LocationSerialiser.parse(plugin.track().getString("Lobby"));
+        this.startLocation = LocationSerialiser.parse(plugin.track().getString("Start"));
         this.laps = Math.max(1, config.getInt("Settings.Laps", 3));
-        this.boundary = Region.parse(config.getString("Data.Boundary.Pos1"), config.getString("Data.Boundary.Pos2"));
+        this.boundary = Region.parse(plugin.track().getString("Boundary.Pos1"), plugin.track().getString("Boundary.Pos2"));
 
         plugin.race = this;
         startGathering();
@@ -160,8 +159,8 @@ public class PigRace {
     }
 
     private void announceJoin(int seconds) {
-        String hover = plugin.message("Messages.JoinHover");
-        for (String line : plugin.messages("Messages.JoinRace")) {
+        String hover = plugin.message("Chat.JoinHover");
+        for (String line : plugin.messages("Chat.JoinRace")) {
             line = Main.center(line.replace("{time}", String.valueOf(seconds))
                     .replace("{seconds}", seconds == 1 ? "second" : "seconds")
                     .replace("{players}", String.valueOf(racers.size()))
@@ -178,16 +177,16 @@ public class PigRace {
 
     private void startRace(boolean forced) {
         if (racers.isEmpty()) {
-            Bukkit.broadcastMessage(plugin.message("Messages.RaceVoided"));
+            Bukkit.broadcastMessage(plugin.message("Chat.RaceVoided"));
             stop();
             return;
         }
         int minPlayers = getMinPlayers();
         if (!forced && racers.size() < minPlayers) {
             for (Racer r : racers) {
-                r.getPlayer().sendMessage(plugin.message("Messages.NotEnoughPlayers").replace("{min}", String.valueOf(minPlayers)));
+                r.getPlayer().sendMessage(plugin.message("Chat.NotEnoughPlayers").replace("{min}", String.valueOf(minPlayers)));
             }
-            Bukkit.broadcastMessage(plugin.message("Messages.RaceCancelled").replace("{min}", String.valueOf(minPlayers)));
+            Bukkit.broadcastMessage(plugin.message("Chat.RaceCancelled").replace("{min}", String.valueOf(minPlayers)));
             stop();
             return;
         }
@@ -218,7 +217,7 @@ public class PigRace {
 
     private TreeMap<Integer, String> countdownTitles() {
         TreeMap<Integer, String> titles = new TreeMap<>();
-        ConfigurationSection section = config.getConfigurationSection("Titles.Countdown");
+        ConfigurationSection section = plugin.messagesConfig().getConfigurationSection("Titles.Countdown");
         if (section != null) {
             for (String key : section.getKeys(false)) {
                 try {
@@ -296,7 +295,7 @@ public class PigRace {
         }
         if (completedRacers.isEmpty()) {
             // Everyone left before anyone finished: nothing to celebrate
-            Bukkit.broadcastMessage(plugin.message("Messages.RaceVoided"));
+            Bukkit.broadcastMessage(plugin.message("Chat.RaceVoided"));
             stop();
             return;
         }
@@ -308,8 +307,8 @@ public class PigRace {
     /** The results board: the RaceOver lines, with a line per finisher where {results} is. */
     private void broadcastResults() {
         List<String> board = new ArrayList<>();
-        String resultLine = plugin.message("Messages.ResultLine");
-        for (String line : plugin.messages("Messages.RaceOver")) {
+        String resultLine = plugin.message("Chat.ResultLine");
+        for (String line : plugin.messages("Chat.RaceOver")) {
             if (!line.contains("{results}")) {
                 board.add(Main.center(line));
                 continue;
@@ -402,18 +401,18 @@ public class PigRace {
         for (Racer r : racers) {
             String text;
             if (raceState == RaceState.WAITING) {
-                text = plugin.message("Actionbar.Waiting")
+                text = plugin.message("ActionBar.Waiting")
                         .replace("{players}", String.valueOf(racers.size()))
                         .replace("{min}", String.valueOf(getMinPlayers()))
                         .replace("{time}", String.valueOf(Math.max(0, secondsLeft)));
             } else if (raceState == RaceState.STARTING) {
-                text = plugin.message("Actionbar.Starting");
+                text = plugin.message("ActionBar.Starting");
             } else if (completedRacers.contains(r)) {
-                text = plugin.message("Actionbar.Finished")
+                text = plugin.message("ActionBar.Finished")
                         .replace("{position}", ordinal(getRacerPosition(r)))
                         .replace("{time}", formatTime(r.getFinishMillis() - goMillis));
             } else if (raceState == RaceState.INPROGRESS) {
-                text = plugin.message("Actionbar.Racing")
+                text = plugin.message("ActionBar.Racing")
                         .replace("{lap}", String.valueOf(Math.min(laps, r.getLap() + 1)))
                         .replace("{total}", String.valueOf(laps))
                         .replace("{ring}", String.valueOf(Math.min(r.getCheckpoint(), checkpoints.size())))
@@ -472,7 +471,7 @@ public class PigRace {
             }
             if (outside) {
                 sendBack(r, lastSafePlace(r));
-                player.sendMessage(plugin.message("Messages.OutOfBounds"));
+                player.sendMessage(plugin.message("Chat.OutOfBounds"));
                 Sounds.play(player, config, "Sounds.Crash");
             }
         }
@@ -558,7 +557,7 @@ public class PigRace {
         if (racer.getLap() < laps) {
             String lap = String.valueOf(racer.getLap());
             String total = String.valueOf(laps);
-            player.sendMessage(plugin.message("Messages.LapComplete")
+            player.sendMessage(plugin.message("Chat.LapComplete")
                     .replace("{lap}", lap).replace("{total}", total).replace("{time}", time));
             boolean finalLap = racer.getLap() == laps - 1;
             Titles.sendTitle(player, 0, 30, 10,
@@ -573,7 +572,7 @@ public class PigRace {
         Titles.sendTitle(player, 0, 50, 15, plugin.message("Titles.Finished").replace("{position}", position),
                 plugin.message("Titles.FinishedSubtitle").replace("{position}", position).replace("{time}", time));
         releaseRacer(racer, true);
-        Bukkit.broadcastMessage(plugin.message("Messages.CompleteBroadcast")
+        Bukkit.broadcastMessage(plugin.message("Chat.CompleteBroadcast")
                 .replace("{player}", player.getName())
                 .replace("{position}", position)
                 .replace("{time}", time));
@@ -584,15 +583,15 @@ public class PigRace {
 
     /**
      * Runs the admin's reward commands from the console for a racer who finished: their place's
-     * commands from Rewards.Places, then Rewards.AllFinishers. One bad command doesn't stop the rest.
+     * commands from Places in rewards.yml, then AllFinishers. One bad command doesn't stop the rest.
      */
     private void giveRewards(Racer racer, int position, String time) {
         List<String> commands = new ArrayList<>();
-        ConfigurationSection places = config.getConfigurationSection("Rewards.Places");
+        ConfigurationSection places = plugin.rewards().getConfigurationSection("Places");
         if (places != null) {
             commands.addAll(places.getStringList(String.valueOf(position)));
         }
-        commands.addAll(config.getStringList("Rewards.AllFinishers"));
+        commands.addAll(plugin.rewards().getStringList("AllFinishers"));
 
         Player player = racer.getPlayer();
         for (String raw : commands) {
@@ -642,19 +641,19 @@ public class PigRace {
 
     public void addPlayer(Player player) {
         if (isRacer(player)) {
-            player.sendMessage(plugin.message("Messages.AlreadyInRace"));
+            player.sendMessage(plugin.message("Chat.AlreadyInRace"));
             return;
         }
         if (raceState != RaceState.WAITING) {
-            player.sendMessage(plugin.message("Messages.AlreadyStarted"));
+            player.sendMessage(plugin.message("Chat.AlreadyStarted"));
             return;
         }
         racers.add(new Racer(player));
         player.teleport(waitLocation);
-        for (String s : plugin.messages("Messages.Joined")) {
+        for (String s : plugin.messages("Chat.Joined")) {
             player.sendMessage(Main.center(s.replace("{min}", String.valueOf(getMinPlayers()))));
         }
-        Bukkit.broadcastMessage(plugin.message("Messages.JoinedBroadcast")
+        Bukkit.broadcastMessage(plugin.message("Chat.JoinedBroadcast")
                 .replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
     }
 
@@ -666,10 +665,10 @@ public class PigRace {
                 releaseRacer(r, player.isOnline());
                 it.remove();
                 if (messages) {
-                    player.sendMessage(plugin.message("Messages.Leave"));
+                    player.sendMessage(plugin.message("Chat.Leave"));
                 }
                 if (raceState == RaceState.WAITING) {
-                    Bukkit.broadcastMessage(plugin.message("Messages.LeftBroadcast")
+                    Bukkit.broadcastMessage(plugin.message("Chat.LeftBroadcast")
                             .replace("{player}", player.getName()).replace("{amount}", String.valueOf(racers.size())));
                 }
                 if (raceState == RaceState.STARTING || raceState == RaceState.INPROGRESS) {
@@ -679,7 +678,7 @@ public class PigRace {
             }
         }
         if (messages) {
-            player.sendMessage(plugin.message("Messages.NotInRace"));
+            player.sendMessage(plugin.message("Chat.NotInRace"));
         }
     }
 

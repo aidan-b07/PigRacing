@@ -57,7 +57,7 @@ public class RaceListener implements Listener {
         PigRace race = plugin.race;
         if (race != null && !race.isDismountAllowed(player)) {
             e.setCancelled(true);
-            player.sendMessage(plugin.message("Messages.DismountMessage"));
+            player.sendMessage(plugin.message("Chat.DismountMessage"));
         }
     }
 
@@ -134,7 +134,7 @@ public class RaceListener implements Listener {
             return;
         }
         e.setCancelled(true);
-        e.getPlayer().sendMessage(plugin.message("Messages.CommandBlocked"));
+        e.getPlayer().sendMessage(plugin.message("Chat.CommandBlocked"));
     }
 
     private static boolean containsIgnoreCase(List<String> list, String value) {

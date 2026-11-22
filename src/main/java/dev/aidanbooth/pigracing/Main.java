@@ -9,7 +9,9 @@ import dev.aidanbooth.pigracing.race.PigFlight;
 import dev.aidanbooth.pigracing.race.PigRace;
 import dev.aidanbooth.pigracing.race.RingRenderer;
 import org.bukkit.ChatColor;
+import dev.aidanbooth.pigracing.utils.ConfigFile;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -24,6 +26,13 @@ public final class Main extends JavaPlugin {
     private PigFlight flight;
     private RingRenderer rings;
     private boolean inputLoadFailed;
+
+    private final ConfigFile messagesFile = new ConfigFile(this, "messages.yml", null);
+    private final ConfigFile rewardsFile = new ConfigFile(this, "rewards.yml", null);
+    private final ConfigFile trackFile = new ConfigFile(this, "track.yml",
+            "PigRacing track. Written by the setup commands (/race setlobby, setstart, ring, boundary),\n"
+                    + "so edit it with those rather than by hand. Locations are world~x~y~z~yaw~pitch.\n"
+                    + "Rings: Location is the ring's centre and the way it faces, Size the opening it fits.");
 
     @Override
     public void onLoad() {
@@ -40,6 +49,8 @@ public final class Main extends JavaPlugin {
         // Missing keys fall back to the defaults inside the jar, so no saveConfig() here: on older
         // versions that would strip every comment from the file
         saveDefaultConfig();
+        migrateSingleFile();
+        loadFiles();
 
         if (inputLoadFailed) {
             getServer().getPluginManager().disablePlugin(this);
@@ -56,7 +67,7 @@ public final class Main extends JavaPlugin {
         getLogger().info("Reading the jump key with " + input.name());
 
         flight = new PigFlight(input, getConfig().getConfigurationSection("Flight"));
-        checkpoints.load(getConfig(), getLogger());
+        checkpoints.load(track(), getLogger());
         rings = new RingRenderer(this);
         rings.reload(ringsConfig());
         getServer().getScheduler().runTaskTimer(this, rings, 1, Math.max(1, getConfig().getInt("Rings.Interval", 2)));
@@ -82,9 +93,90 @@ public final class Main extends JavaPlugin {
 
     public void reload() {
         reloadConfig();
-        checkpoints.load(getConfig(), getLogger());
+        loadFiles();
+        checkpoints.load(track(), getLogger());
         flight.reload(getConfig().getConfigurationSection("Flight"));
         rings.reload(ringsConfig());
+    }
+
+    private void loadFiles() {
+        messagesFile.load();
+        rewardsFile.load();
+        trackFile.load();
+    }
+
+    /** Chat messages, titles and action bars. */
+    public FileConfiguration messagesConfig() {
+        return messagesFile.get();
+    }
+
+    /** Reward commands for finishers. */
+    public FileConfiguration rewards() {
+        return rewardsFile.get();
+    }
+
+    /** The lobby, start, rings and boundary, written by the setup commands. */
+    public FileConfiguration track() {
+        return trackFile.get();
+    }
+
+    public void saveTrack() {
+        trackFile.save();
+    }
+
+    /**
+     * Until the split everything lived in config.yml. On the first start after it, the track and the
+     * rewards are moved into their own files; nothing in config.yml is changed or deleted, since
+     * saving it would strip its comments on older servers.
+     */
+    private void migrateSingleFile() {
+        FileConfiguration old = getConfig();
+        if (!trackFile.exists() && old.isConfigurationSection("Data")) {
+            trackFile.load();
+            FileConfiguration track = trackFile.get();
+            copy(old, "Data.WaitingLocation", track, "Lobby");
+            copy(old, "Data.StartLocation", track, "Start");
+            copy(old, "Data.Checkpoints", track, Checkpoints.PATH);
+            copy(old, "Data.Boundary", track, "Boundary");
+            trackFile.save();
+            getLogger().info("Moved the track (lobby, start, rings, boundary) from config.yml into track.yml");
+        }
+        ConfigurationSection oldPlaces = old.getConfigurationSection("Rewards.Places");
+        boolean hadRewards = (oldPlaces != null && !oldPlaces.getKeys(false).isEmpty())
+                || !old.getStringList("Rewards.AllFinishers").isEmpty();
+        if (!rewardsFile.exists() && hadRewards) {
+            rewardsFile.load();
+            copy(old, "Rewards.Places", rewardsFile.get(), "Places");
+            copy(old, "Rewards.AllFinishers", rewardsFile.get(), "AllFinishers");
+            rewardsFile.save();
+            getLogger().info("Moved the rewards from config.yml into rewards.yml");
+        }
+        boolean leftovers = false;
+        for (String section : new String[]{"Data", "Rewards", "Messages", "Titles", "Actionbar"}) {
+            leftovers |= old.isConfigurationSection(section);
+        }
+        if (leftovers) {
+            getLogger().info("config.yml still has sections from before it was split (Data, Rewards, Messages, Titles,"
+                    + " Actionbar). They aren't read any more: messages are in messages.yml now. Delete them, or"
+                    + " delete config.yml to get a fresh one.");
+        }
+    }
+
+    /** Copies one value, or a whole section, to another file under a new path. */
+    private static void copy(ConfigurationSection from, String fromPath, ConfigurationSection to, String toPath) {
+        if (!from.isSet(fromPath)) {
+            return;
+        }
+        if (!from.isConfigurationSection(fromPath)) {
+            to.set(toPath, from.get(fromPath));
+            return;
+        }
+        ConfigurationSection section = from.getConfigurationSection(fromPath);
+        for (String key : section.getKeys(true)) {
+            if (!section.isConfigurationSection(key)) {
+                to.set(toPath + "." + key, section.get(key));
+            }
+        }
     }
 
     private ConfigurationSection ringsConfig() {
@@ -110,19 +202,19 @@ public final class Main extends JavaPlugin {
      * {@link #center} once their placeholders are filled.
      */
     public String message(String path) {
-        return color(withPrefix(getConfig().getString(path, path)));
+        return color(withPrefix(messagesConfig().getString(path, path)));
     }
 
     public List<String> messages(String path) {
         List<String> lines = new ArrayList<>();
-        for (String line : getConfig().getStringList(path)) {
+        for (String line : messagesConfig().getStringList(path)) {
             lines.add(color(withPrefix(line)));
         }
         return lines;
     }
 
     private String withPrefix(String text) {
-        return text == null ? null : text.replace("{prefix}", getConfig().getString("Messages.Prefix", ""));
+        return text == null ? null : text.replace("{prefix}", messagesConfig().getString("Prefix", ""));
     }
 
     public static String color(String text) {
