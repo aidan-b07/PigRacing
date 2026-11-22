@@ -7,8 +7,9 @@ import org.bukkit.util.Vector;
 
 /**
  * A ring racers fly through: a centre, the way it faces, and its size in blocks. A size 3 ring fits a
- * 3x3 opening exactly. Racers have to fly through it the way it faces; going through backwards
- * doesn't count. Holds the world by name so a track can load before its world does.
+ * 3x3 opening exactly. Flying through either way counts; the way it faces only sets how the ring is
+ * tilted and which way a crashed racer faces when they respawn there. Holds the world by name so a
+ * track can load before its world does.
  */
 public final class Checkpoint {
     /** Extra room around the ring's edge, so a pig's body clipping the rim still counts. */
@@ -133,7 +134,7 @@ public final class Checkpoint {
     }
 
     /**
-     * Whether something moving from one point to the next went through the ring, forwards. Works
+     * Whether something moving from one point to the next went through the ring, either way. Works
      * from the path between the two, so a fast pig can't skip the ring between ticks.
      */
     public boolean crossedBy(Location from, Location to) {
@@ -150,7 +151,8 @@ public final class Checkpoint {
         Vector b = to.toVector();
         double before = a.clone().subtract(center).dot(normal);
         double after = b.clone().subtract(center).dot(normal);
-        if (!(before < 0 && after >= 0)) {
+        // Either way through counts: only crossing the ring's plane matters
+        if ((before < 0) == (after < 0)) {
             return false;
         }
         double t = before / (before - after);
