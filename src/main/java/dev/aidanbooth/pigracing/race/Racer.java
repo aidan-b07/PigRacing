@@ -13,10 +13,8 @@ public class Racer {
     private boolean inGame;
     /** Checkpoints passed since the pig last touched the ground. Each one adds speed. */
     private int speedLevel;
-    /** Forward speed, eased towards the pig's target speed. */
-    private double speed;
-    /** The velocity flown last tick, smoothed towards where the rider looks. */
-    private Vector velocity = new Vector();
+    /** Up/down speed, kept here because the server's own gravity would be counted twice if read back. */
+    private double verticalSpeed;
     /** Ticks left that the pig holds its height after a respawn. */
     private int hoverTicks;
     private long finishMillis;
@@ -84,8 +82,7 @@ public class Racer {
     /** Back to a standstill after a crash or respawn, hovering for a moment. */
     public void resetSpeed(int hoverTicks) {
         speedLevel = 0;
-        speed = 0;
-        velocity = new Vector();
+        verticalSpeed = 0;
         this.hoverTicks = hoverTicks;
         knockback = new Vector();
         lastPigLocation = null;
@@ -128,20 +125,12 @@ public class Racer {
         this.airborne = airborne;
     }
 
-    public double getSpeed() {
-        return speed;
+    public double getVerticalSpeed() {
+        return verticalSpeed;
     }
 
-    public void setSpeed(double speed) {
-        this.speed = speed;
-    }
-
-    public Vector getVelocity() {
-        return velocity;
-    }
-
-    public void setVelocity(Vector velocity) {
-        this.velocity = velocity;
+    public void setVerticalSpeed(double verticalSpeed) {
+        this.verticalSpeed = verticalSpeed;
     }
 
     /** Whether the pig is still hovering after a respawn; counts down one tick. */
