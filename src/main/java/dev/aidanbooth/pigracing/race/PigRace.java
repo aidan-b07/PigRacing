@@ -57,6 +57,9 @@ public class PigRace {
     private int secondsLeft;
     /** When GO was shown, for race times. */
     private long goMillis;
+    /** Seconds racers have from GO, or 0 for no limit. */
+    private final int timeLimit;
+    private final List<Integer> timeWarnings;
 
     /** Checks a race can run here. Returns a reason it can't, or null if it can. */
     public static String validate(Main plugin) {
@@ -79,6 +82,8 @@ public class PigRace {
         this.waitLocation = LocationSerialiser.parse(plugin.track().getString("Lobby"));
         this.startLocation = LocationSerialiser.parse(plugin.track().getString("Start"));
         this.laps = Math.max(1, config.getInt("Settings.Laps", 3));
+        this.timeLimit = Math.max(0, config.getInt("Settings.TimeLimit", 300));
+        this.timeWarnings = config.getIntegerList("Settings.TimeWarnings");
         this.boundary = Region.parse(plugin.track().getString("Boundary.Pos1"), plugin.track().getString("Boundary.Pos2"));
 
         plugin.race = this;
@@ -262,6 +267,9 @@ public class PigRace {
                 }
                 raceState = RaceState.INPROGRESS;
                 goMillis = System.currentTimeMillis();
+                if (timeLimit > 0) {
+                    repeat(PigRace.this::checkTimeLimit, 20, 20);
+                }
                 repeat(PigRace.this::flyPigs, 1, 1);
                 repeat(PigRace.this::checkTooFar, 5, 5);
             }
@@ -304,6 +312,57 @@ public class PigRace {
         Bukkit.getScheduler().runTaskLater(plugin, this::stop, 20L * Math.max(0, config.getInt("Settings.EndDelay", 5)));
     }
 
+    /** Seconds left before the time limit, never below 0. */
+    private long secondsRemaining() {
+        long elapsed = (System.currentTimeMillis() - goMillis) / 1000;
+        return Math.max(0, timeLimit - elapsed);
+    }
+
+    /** Once a second while racing: warnings as the limit nears, and the end when it's reached. */
+    private void checkTimeLimit() {
+        if (raceState != RaceState.INPROGRESS) {
+            return;
+        }
+        long left = secondsRemaining();
+        if (left <= 0) {
+            timeUp();
+            return;
+        }
+        if (timeWarnings.contains((int) left)) {
+            String warning = plugin.message("Chat.TimeWarning")
+                    .replace("{time}", formatClock(left)).replace("{seconds}", String.valueOf(left));
+            for (Racer r : racers) {
+                if (r.inGame()) {
+                    r.getPlayer().sendMessage(warning);
+                    Sounds.play(r.getPlayer(), config, "Sounds.TimeWarning");
+                }
+            }
+        }
+    }
+
+    /** The time limit ran out: whoever finished keeps their place, everyone still flying is out. */
+    private void timeUp() {
+        raceState = RaceState.ENDED;
+        for (Racer r : racers) {
+            if (r.inGame()) {
+                Titles.sendTitle(r.getPlayer(), 0, 50, 15, plugin.message("Titles.TimeUp"), plugin.message("Titles.TimeUpSubtitle"));
+                Sounds.play(r.getPlayer(), config, "Sounds.Crash");
+            }
+        }
+        Bukkit.broadcastMessage(plugin.message("Chat.TimeUp"));
+        if (completedRacers.isEmpty()) {
+            Bukkit.broadcastMessage(plugin.message("Chat.NobodyFinished"));
+        } else {
+            broadcastResults();
+        }
+        stop();
+    }
+
+    /** 125 seconds as "2:05". */
+    static String formatClock(long seconds) {
+        return (seconds / 60) + ":" + String.format(java.util.Locale.ROOT, "%02d", seconds % 60);
+    }
+
     /** The results board: the RaceOver lines, with a line per finisher where {results} is. */
     private void broadcastResults() {
         List<String> board = new ArrayList<>();
@@ -319,6 +378,13 @@ public class PigRace {
                         .replace("{position}", ordinal(i + 1))
                         .replace("{player}", r.getPlayer().getName())
                         .replace("{time}", formatTime(r.getFinishMillis() - goMillis))));
+            }
+            // Only after the time limit: racers still flying didn't finish
+            String dnfLine = plugin.message("Chat.DidNotFinishLine");
+            for (Racer r : racers) {
+                if (r.inGame()) {
+                    board.add(Main.center(dnfLine.replace("{player}", r.getPlayer().getName())));
+                }
             }
         }
         for (String line : board) {
@@ -412,7 +478,8 @@ public class PigRace {
                         .replace("{position}", ordinal(getRacerPosition(r)))
                         .replace("{time}", formatTime(r.getFinishMillis() - goMillis));
             } else if (raceState == RaceState.INPROGRESS) {
-                text = plugin.message("ActionBar.Racing")
+                text = plugin.message(timeLimit > 0 ? "ActionBar.Racing" : "ActionBar.RacingNoLimit")
+                        .replace("{remaining}", formatClock(secondsRemaining()))
                         .replace("{lap}", String.valueOf(Math.min(laps, r.getLap() + 1)))
                         .replace("{total}", String.valueOf(laps))
                         .replace("{ring}", String.valueOf(Math.min(r.getCheckpoint(), checkpoints.size())))

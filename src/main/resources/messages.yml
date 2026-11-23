@@ -46,6 +46,17 @@ Chat:
     - "{center}&7Thanks for racing!"
     - "{center}&d&m                                                            "
   ResultLine: "{center}&d&l{position}  &f{player}  &7{time}"
+  # On the results board after the time limit, for each racer still flying
+  DidNotFinishLine: "{center}&8&lDNF  &7{player}"
+  # {time} as 1:00, {seconds}
+  TimeWarning: "{prefix}&d{time} &fleft to finish!"
+  TimeUp: "{prefix}&fTime's up! The pig race is over."
+  NobodyFinished: "{prefix}&fNobody finished in time."
+  # /race next. {in} (e.g. "12 minutes"), {at} (e.g. 18:00)
+  NextRace: "{prefix}&fThe next pig race opens in &d{in} &7({at})"
+  NextRaceOpen: "{prefix}&fA race is taking sign-ups right now! &d/race join"
+  NextRaceRunning: "{prefix}&fA race is on right now. The next one opens after it."
+  NextRaceNone: "{prefix}&fNo races are scheduled. Keep an eye on chat!"
   OutOfBounds: "{prefix}&cOut of bounds! &fBack to your last ring."
   DismountMessage: "{prefix}&cYou can't get off mid-race. &fType &d/race leave &fto quit."
   CommandBlocked: "{prefix}&cYou can't use that here. &fType &d/race leave &fto quit the race."
@@ -61,6 +72,7 @@ Chat:
     Player:
       - "&d/{label} join &8- &fJoin the race that's starting"
       - "&d/{label} leave &8- &fLeave the race"
+      - "&d/{label} next &8- &fWhen the next race is"
     Admin:
       - ""
       - "{center}&7Running races"
@@ -140,12 +152,17 @@ Titles:
   # {position} is 1st, 2nd... {time} is the race time
   Finished: "&d&l{position}"
   FinishedSubtitle: "&fFinished in &d{time}"
+  TimeUp: "&c&lTIME'S UP"
+  TimeUpSubtitle: "&fBetter luck next race"
 
 ActionBar:
   # {players}, {min}, {time} (seconds left)
   Waiting: "&fWaiting for racers  &8|  &d{players}&7/&d{min}  &8|  &fStarts in &d{time}s"
   Starting: "&d&lGet ready..."
-  # {lap}, {total}, {ring} (rings passed this lap), {rings}, {speed} (top speed, blocks/s), {time}
-  Racing: "&fLap &d{lap}&7/&d{total}   &8|   &fRing &d{ring}&7/&d{rings}   &8|   &d{time}"
+  # {lap}, {total}, {ring} (rings passed this lap), {rings}, {speed} (top speed, blocks/s),
+  # {time} (race time so far), {remaining} (time left)
+  Racing: "&fLap &d{lap}&7/&d{total}   &8|   &fRing &d{ring}&7/&d{rings}   &8|   &d{remaining} &fleft"
+  # The same, when there's no time limit
+  RacingNoLimit: "&fLap &d{lap}&7/&d{total}   &8|   &fRing &d{ring}&7/&d{rings}   &8|   &d{time}"
   # {position}, {time}
   Finished: "&fYou finished &d{position} &fin &d{time}"

@@ -29,7 +29,7 @@ import java.util.UUID;
 /**
  * /race and its subcommands:
  * <pre>
- * join, leave, help                        everyone
+ * join, leave, next, help                  everyone
  * start                                    pigracing.start
  * forcestart, stop, reload                 pigracing.admin
  * setlobby, setstart                       pigracing.admin, where you stand
@@ -43,7 +43,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     private static final String START = "pigracing.start";
     private static final int MAX_RING_SIZE = 32;
 
-    private static final List<String> PLAYER_COMMANDS = Arrays.asList("help", "join", "leave");
+    private static final List<String> PLAYER_COMMANDS = Arrays.asList("help", "join", "leave", "next");
     private static final List<String> ADMIN_COMMANDS = Arrays.asList("start", "forcestart", "stop", "reload",
             "setlobby", "setstart", "ring", "preview", "boundary");
     private static final List<String> RING_COMMANDS = Arrays.asList("add", "remove", "list", "tp", "clear");
@@ -66,6 +66,9 @@ public class MainCommand implements CommandExecutor, TabCompleter {
                 return true;
             case "leave":
                 leave(sender);
+                return true;
+            case "next":
+                next(sender);
                 return true;
             case "start":
                 if (allowed(sender, START)) {
@@ -185,6 +188,26 @@ public class MainCommand implements CommandExecutor, TabCompleter {
             return;
         }
         plugin.race.removePlayer((Player) sender, true);
+    }
+
+    /** When the next race is: now, if one is taking sign-ups, or the next scheduled one. */
+    private void next(CommandSender sender) {
+        if (plugin.race != null) {
+            sender.sendMessage(plugin.message(plugin.race.getGameState() == RaceState.WAITING
+                    ? "Chat.NextRaceOpen" : "Chat.NextRaceRunning"));
+            return;
+        }
+        java.time.LocalDateTime next = plugin.getScheduler().next();
+        if (next == null) {
+            sender.sendMessage(plugin.message("Chat.NextRaceNone"));
+            return;
+        }
+        long minutes = Math.max(0, java.time.Duration.between(java.time.LocalDateTime.now(), next).toMinutes());
+        String in = minutes < 1 ? "under a minute" : minutes < 60 ? minutes + (minutes == 1 ? " minute" : " minutes")
+                : (minutes / 60) + "h " + (minutes % 60) + "m";
+        sender.sendMessage(plugin.message("Chat.NextRace")
+                .replace("{in}", in)
+                .replace("{at}", String.format(Locale.ROOT, "%02d:%02d", next.getHour(), next.getMinute())));
     }
 
     // ------------------------------------------------------------------ running races

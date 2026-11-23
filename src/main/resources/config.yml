@@ -17,6 +17,11 @@ Settings:
   # Fewer racers than this when joining closes cancels the race. /race forcestart ignores it.
   # A race nobody joined is always called off.
   MinPlayers: 2
+  # Seconds racers have from GO to finish; 0 for no limit. When it runs out the race ends: finishers
+  # keep their places and rewards, everyone still flying doesn't finish.
+  TimeLimit: 300
+  # Seconds left when racers are warned
+  TimeWarnings: [60, 30, 10, 5, 4, 3, 2, 1]
   # Seconds between the last racer finishing and everyone being sent back
   EndDelay: 5
   # Racers this far from the start (or in another world) are sent back to their last ring.
@@ -29,6 +34,18 @@ Settings:
   # Pigs can land on these without crashing. * matches anything, e.g. "*_CARPET"
   SafeGroundBlocks:
     - "*CARPET"
+
+# Races that open by themselves, as if an admin ran /race start. Players can check when the next one
+# is with /race next. A race isn't opened if one is already running, too few players are online, or
+# the track isn't set up; that slot is skipped.
+Schedule:
+  Enabled: false
+  # Open a race every this many minutes, counted from when the server starts. 0 for none.
+  EveryMinutes: 30
+  # And/or at these times of day, 24-hour clock, server time. [] for none.
+  Times: ["18:00", "21:00"]
+  # Players that have to be online for a scheduled race to open
+  MinOnline: 2
 
 # Which commands players in a race may use. /race always works, so anyone can leave.
 # Mode "whitelist": only the listed commands work. Mode "blacklist": everything but them works.
@@ -131,6 +148,10 @@ Sounds:
     sound: ENTITY_PLAYER_LEVELUP
     volume: 1.0
     pitch: 1.4
+  TimeWarning:
+    sound: BLOCK_NOTE_BLOCK_HAT
+    volume: 1.0
+    pitch: 1.2
   Crash:
     sound: ENTITY_VILLAGER_DEATH
     volume: 1.0

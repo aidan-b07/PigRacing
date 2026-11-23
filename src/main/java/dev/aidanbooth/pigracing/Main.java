@@ -7,6 +7,7 @@ import dev.aidanbooth.pigracing.listeners.RaceListener;
 import dev.aidanbooth.pigracing.race.Checkpoints;
 import dev.aidanbooth.pigracing.race.PigFlight;
 import dev.aidanbooth.pigracing.race.PigRace;
+import dev.aidanbooth.pigracing.race.RaceScheduler;
 import dev.aidanbooth.pigracing.race.RingRenderer;
 import org.bukkit.ChatColor;
 import dev.aidanbooth.pigracing.utils.ConfigFile;
@@ -25,6 +26,7 @@ public final class Main extends JavaPlugin {
     private final Checkpoints checkpoints = new Checkpoints();
     private PigFlight flight;
     private RingRenderer rings;
+    private RaceScheduler scheduler;
     private boolean inputLoadFailed;
 
     private final ConfigFile messagesFile = new ConfigFile(this, "messages.yml", null);
@@ -71,6 +73,9 @@ public final class Main extends JavaPlugin {
         rings = new RingRenderer(this);
         rings.reload(ringsConfig());
         getServer().getScheduler().runTaskTimer(this, rings, 1, Math.max(1, getConfig().getInt("Rings.Interval", 2)));
+        scheduler = new RaceScheduler(this);
+        scheduler.reload(section("Schedule"));
+        getServer().getScheduler().runTaskTimer(this, scheduler, 20, 20);
 
         getServer().getPluginManager().registerEvents(new RaceListener(this), this);
         RaceListener.registerPickupBlocker(this);
@@ -97,6 +102,16 @@ public final class Main extends JavaPlugin {
         checkpoints.load(track(), getLogger());
         flight.reload(getConfig().getConfigurationSection("Flight"));
         rings.reload(ringsConfig());
+        scheduler.reload(section("Schedule"));
+    }
+
+    private ConfigurationSection section(String path) {
+        ConfigurationSection section = getConfig().getConfigurationSection(path);
+        return section != null ? section : getConfig().createSection(path);
+    }
+
+    public RaceScheduler getScheduler() {
+        return scheduler;
     }
 
     private void loadFiles() {
