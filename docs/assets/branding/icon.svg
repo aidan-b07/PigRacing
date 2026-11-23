@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#1d2246"/>
+
+  <!-- motion lines -->
+  <g stroke="#ff8fb8" stroke-width="14" stroke-linecap="round" opacity="0.4">
+    <line x1="48" y1="268" x2="92" y2="268"/>
+    <line x1="36" y1="312" x2="86" y2="312"/>
+    <line x1="56" y1="356" x2="94" y2="356"/>
+  </g>
+
+  <g fill="#ff8fb8">
+    <!-- legs start inside the body so they join it fully -->
+    <rect x="160" y="300" width="34" height="108" rx="14"/>
+    <rect x="216" y="300" width="34" height="114" rx="14"/>
+    <rect x="286" y="300" width="34" height="114" rx="14"/>
+    <rect x="328" y="300" width="34" height="102" rx="14"/>
+    <ellipse cx="250" cy="300" rx="134" ry="88"/>
+    <circle cx="364" cy="262" r="72"/>
+    <!-- ear base -->
+    <path d="M336 208 C332 186 342 168 358 164 C372 166 378 184 378 204 Z"/>
+    <!-- snout -->
+    <ellipse cx="422" cy="272" rx="28" ry="32"/>
+  </g>
+  <!-- ear flap folding forward over the top -->
+  <path fill="#e8709d" d="M348 172 C360 156 388 160 396 192 C384 196 366 190 354 182 Z"/>
+  <!-- snout end, seen from the side -->
+  <ellipse cx="444" cy="272" rx="11" ry="30" fill="#f0739f"/>
+  <path d="M120 286 C92 286 88 256 108 252 C124 250 126 274 108 276" fill="none" stroke="#ff8fb8" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- face -->
+  <circle cx="380" cy="238" r="11" fill="#1d2246"/>
+  <ellipse cx="445" cy="266" rx="3.5" ry="8" fill="#1d2246"/>
+
+  <!-- wing (navy stroke reads as a cut-out gap) -->
+  <path fill="#ffffff" stroke="#1d2246" stroke-width="14" stroke-linejoin="round"
+        d="M300 236 C292 160 236 96 124 70
+           Q130 110 160 120 Q146 154 184 164 Q176 196 214 204 Q210 232 244 244 Z"/>
+</svg>
