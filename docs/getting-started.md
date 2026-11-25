@@ -25,5 +25,8 @@ Edit the files, then run `/race reload`. It reads all four files again. It's bes
 
 If a setting is missing from one of your files, its default is used, so after an update you don't have to add new settings by hand. To see the new options with their comments, rename your file and restart to get a fresh copy.
 
+## Statistics
+Pig Racing sends anonymous usage statistics, including how many races are run, to [bStats](https://bstats.org/plugin/bukkit/Pig%20Racing/35677). To turn this off, set `enabled: false` in `plugins/bStats/config.yml`. That switch applies to every plugin on the server that uses bStats.
+
 ## Upgrading from an older version
 Older versions kept the track in `config.yml`. On startup Pig Racing moves the lobby, start, rings and boundary into `track.yml` for you, and says so in the console.

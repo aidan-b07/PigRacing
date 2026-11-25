@@ -66,6 +66,10 @@
                                     <pattern>net.kyori</pattern>
                                     <shadedPattern>dev.aidanbooth.pigracing.libs.kyori</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.bstats</pattern>
+                                    <shadedPattern>dev.aidanbooth.pigracing.libs.bstats</shadedPattern>
+                                </relocation>
                             </relocations>
                             <filters>
                                 <filter>
@@ -152,6 +156,12 @@
             <groupId>com.github.cryptomorin</groupId>
             <artifactId>XSeries</artifactId>
             <version>14.0.0</version>
+        </dependency>
+        <!-- Anonymous usage statistics -->
+        <dependency>
+            <groupId>org.bstats</groupId>
+            <artifactId>bstats-bukkit</artifactId>
+            <version>3.2.1</version>
         </dependency>
         <!-- Reads the rider's jump key on servers older than 1.21.3 (no PlayerInputEvent there) -->
         <dependency>

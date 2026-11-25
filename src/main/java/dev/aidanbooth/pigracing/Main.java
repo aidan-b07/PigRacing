@@ -24,6 +24,7 @@ public final class Main extends JavaPlugin {
     public PigRace race;
 
     private final Checkpoints checkpoints = new Checkpoints();
+    private final Stats stats = new Stats();
     private PigFlight flight;
     private RingRenderer rings;
     private RaceScheduler scheduler;
@@ -84,10 +85,13 @@ public final class Main extends JavaPlugin {
         PluginCommand race = getCommand("race");
         race.setExecutor(command);
         race.setTabCompleter(command);
+
+        stats.start(this);
     }
 
     @Override
     public void onDisable() {
+        stats.stop();
         if (race != null) {
             race.stop();
         }
@@ -103,6 +107,10 @@ public final class Main extends JavaPlugin {
         flight.reload(getConfig().getConfigurationSection("Flight"));
         rings.reload(ringsConfig());
         scheduler.reload(section("Schedule"));
+    }
+
+    public Stats getStats() {
+        return stats;
     }
 
     private ConfigurationSection section(String path) {

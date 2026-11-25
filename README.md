@@ -138,6 +138,10 @@ Schedule:
   MinOnline: 2             # skip the slot if fewer players are online
 ```
 
+### Statistics
+
+Pig Racing sends anonymous usage statistics, including how many races are run, to [bStats](https://bstats.org/plugin/bukkit/Pig%20Racing/35677). To turn this off, set `enabled: false` in `plugins/bStats/config.yml`. That switch applies to every plugin on the server that uses bStats.
+
 ## Building from source
 
 You need JDK 8 or newer and Maven.

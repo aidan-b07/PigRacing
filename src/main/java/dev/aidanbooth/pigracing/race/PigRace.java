@@ -267,6 +267,7 @@ public class PigRace {
                 }
                 raceState = RaceState.INPROGRESS;
                 goMillis = System.currentTimeMillis();
+                plugin.getStats().raceStarted();
                 if (timeLimit > 0) {
                     repeat(PigRace.this::checkTimeLimit, 20, 20);
                 }
