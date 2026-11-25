@@ -1,0 +1,91 @@
+name: Bug report
+description: Something in Pig Racing isn't working as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please check the [open issues](https://github.com/aidan-b07/PigRacing/issues) first in case it's already been reported.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect to happen instead? A clip or screenshot helps a lot with flight and ring problems.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      description: The steps that cause the bug, as exactly as you can.
+      placeholder: |
+        1. Run /race start, then /race join and /race forcestart
+        2. Fly through ring 1 and hit the ground
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the plugin is it about?
+      multiple: true
+      options:
+        - Flying and steering
+        - Rings and checkpoints
+        - Crashing and respawning
+        - Joining, the lobby or the countdown
+        - Finishing, results or rewards
+        - Scheduled races or the time limit
+        - Track setup commands
+        - Config or messages
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Pig Racing version
+      description: Shown by `/version PigRacing`.
+      placeholder: "2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server software and version
+      description: Shown by `/version`.
+      placeholder: "Paper 1.21.11"
+    validations:
+      required: true
+
+  - type: input
+    id: client-version
+    attributes:
+      label: Player's Minecraft version
+      description: If it's different from the server's, e.g. when using ViaVersion. Say if they play on Bedrock through Geyser.
+      placeholder: "1.21.11"
+
+  - type: textarea
+    id: errors
+    attributes:
+      label: Errors in the console
+      description: Paste any errors or stack traces from the console or `logs/latest.log`. Remove anything private, like IP addresses, first.
+      render: text
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: If the bug involves your settings or track, paste the relevant part of `config.yml`, `messages.yml`, `rewards.yml` or `track.yml`.
+      render: yaml
+
+  - type: textarea
+    id: other-plugins
+    attributes:
+      label: Other plugins
+      description: Plugins you think might be involved, e.g. anti-cheat, region protection, world or ViaVersion plugins.
