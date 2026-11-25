@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Test servers are shared with Super-Report and Extractors: run/ is a link to ../mc-servers.
-             Defaults to 1.8.8, the only shared server this plugin (NMS v1_8_R3) runs on.
+             Defaults to 1.8.8; .run/ has configs for the others. Missing servers are downloaded on first use.
              Skip with -Dserver.skip=true -->
         <server.version>1.8.8</server.version>
         <server.skip>false</server.skip>
